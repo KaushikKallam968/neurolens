@@ -7,10 +7,16 @@ returns convincing mock data without requiring TribeV2 or GPU.
 """
 
 import os
+import sys
 import logging
+import pathlib
 
 from .metrics import compute_metrics
 from .mock_inference import generate_mock_results
+
+# Fix for loading Linux-created checkpoints on Windows
+if sys.platform == "win32":
+    pathlib.PosixPath = pathlib.WindowsPath
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +56,13 @@ class TribeInference:
         try:
             from tribev2 import TribeModel
 
-            logger.info("Loading TribeV2 model...")
+            logger.info("Loading TribeV2 model (this may download ~10GB on first run)...")
+            cache_dir = os.path.join(os.path.dirname(__file__), "cache")
+            os.makedirs(cache_dir, exist_ok=True)
+            # Use posix-style separator for HuggingFace repo ID
             self.model = TribeModel.from_pretrained(
-                "facebook/tribev2",
-                cache_folder="./cache"
+                "facebook" + "/" + "tribev2",
+                cache_folder=cache_dir,
             )
             logger.info("TribeV2 model loaded successfully")
         except Exception as e:
