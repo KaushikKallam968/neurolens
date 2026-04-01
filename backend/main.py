@@ -21,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from .inference import TribeInference
+from .db import init_db, save_analysis, get_analysis, list_analyses as db_list_analyses
 
 # ---------------------------------------------------------------------------
 # Setup
@@ -51,8 +52,7 @@ app.add_middleware(
 UPLOAD_DIR = Path(__file__).parent / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
-# In-memory results store (no database for MVP)
-results_store = {}
+# SQLite database (replaces in-memory results_store)
 
 # Inference engine (singleton)
 engine = TribeInference()
@@ -67,6 +67,7 @@ executor = ThreadPoolExecutor(max_workers=2)
 @app.on_event("startup")
 async def startup():
     logger.info("Starting NeuroLens API...")
+    init_db()
     engine.load_model()
     logger.info(f"Inference engine status: {engine.status}")
 
@@ -111,15 +112,14 @@ async def analyze_video(file: UploadFile = File(...)):
         logger.error(f"Failed to save upload: {e}")
         raise HTTPException(status_code=500, detail="Failed to save video file")
 
-    # Initialize result entry
-    results_store[analysis_id] = {
-        "status": "processing",
-        "data": None,
-        "error": None,
-        "createdAt": time.time(),
-        "filename": file.filename,
-        "video_path": str(file_path),
-    }
+    # Persist initial processing state to SQLite
+    save_analysis(
+        analysis_id=analysis_id,
+        status="processing",
+        filename=file.filename,
+        video_path=str(file_path),
+        created_at=time.time(),
+    )
 
     # Run analysis in background thread
     loop = asyncio.get_event_loop()
@@ -132,20 +132,26 @@ async def analyze_video(file: UploadFile = File(...)):
 
 
 def _run_analysis(analysis_id, video_path):
-    """Run inference in a background thread. Updates results_store in place."""
+    """Run inference in a background thread. Persists results to SQLite."""
     try:
         logger.info(f"Starting analysis: {analysis_id}")
         result = engine.analyze(video_path)
 
-        results_store[analysis_id]["status"] = "complete"
-        results_store[analysis_id]["data"] = result
-        results_store[analysis_id]["completedAt"] = time.time()
+        save_analysis(
+            analysis_id=analysis_id,
+            status="complete",
+            data=result,
+            completed_at=time.time(),
+        )
         logger.info(f"Analysis complete: {analysis_id}")
 
     except Exception as e:
         logger.error(f"Analysis failed for {analysis_id}: {e}")
-        results_store[analysis_id]["status"] = "error"
-        results_store[analysis_id]["error"] = str(e)
+        save_analysis(
+            analysis_id=analysis_id,
+            status="error",
+            error=str(e),
+        )
 
 
 @app.get("/api/results/{analysis_id}")
@@ -156,16 +162,15 @@ async def get_results(analysis_id: str):
     Returns:
         {"analysisId": str, "status": str, "data": dict|null, "error": str|null}
     """
-    if analysis_id not in results_store:
+    entry = get_analysis(analysis_id)
+    if not entry:
         raise HTTPException(status_code=404, detail="Analysis not found")
-
-    entry = results_store[analysis_id]
 
     return {
         "analysisId": analysis_id,
         "status": entry["status"],
-        "data": entry["data"],
-        "error": entry["error"],
+        "data": entry.get("data"),
+        "error": entry.get("error"),
         "filename": entry.get("filename"),
     }
 
@@ -175,10 +180,10 @@ async def get_video(analysis_id: str):
     """
     Serve the uploaded video file for playback.
     """
-    if analysis_id not in results_store:
+    entry = get_analysis(analysis_id)
+    if not entry:
         raise HTTPException(status_code=404, detail="Analysis not found")
 
-    entry = results_store[analysis_id]
     video_path = entry.get("video_path")
 
     if not video_path or not os.path.exists(video_path):
@@ -196,25 +201,21 @@ async def list_analyses():
     """
     Return a list of all completed analyses with summary info.
     """
+    rows = db_list_analyses()
     analyses = []
-    for aid, entry in results_store.items():
-        if entry["status"] != "complete":
-            continue
-
+    for entry in rows:
         neural_score = None
         if entry.get("data") and entry["data"].get("neuralScore") is not None:
             neural_score = entry["data"]["neuralScore"]
 
         analyses.append({
-            "analysisId": aid,
+            "analysisId": entry["analysis_id"],
             "filename": entry.get("filename"),
             "neuralScore": neural_score,
-            "createdAt": entry.get("createdAt"),
-            "completedAt": entry.get("completedAt"),
+            "createdAt": entry.get("created_at"),
+            "completedAt": entry.get("completed_at"),
         })
 
-    # Sort by most recent first
-    analyses.sort(key=lambda x: x.get("completedAt") or 0, reverse=True)
     return analyses
 
 

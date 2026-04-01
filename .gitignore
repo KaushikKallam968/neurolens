@@ -1,3 +1,3 @@
-node_modules/\ndist/\n__pycache__/\n*.pyc\nuploads/\ncache/\n.env\n*.egg-info/
+node_modules/\ndist/\n__pycache__/\n*.pyc\nuploads/\ncache/\n.env\n*.egg-info/\nneurolens.db\nneurolens.db-wal\nneurolens.db-shm
 
 .vercel
