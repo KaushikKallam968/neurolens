@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 const POLL_INTERVAL = 2000;
 
@@ -7,6 +7,7 @@ export function useAnalysis() {
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState(0);
+  const [analyses, setAnalyses] = useState([]);
   const pollingRef = useRef(null);
 
   const stopPolling = useCallback(() => {
@@ -15,6 +16,22 @@ export function useAnalysis() {
       pollingRef.current = null;
     }
   }, []);
+
+  const fetchAnalyses = useCallback(async () => {
+    try {
+      const response = await fetch('/api/analyses');
+      if (!response.ok) return;
+      const data = await response.json();
+      setAnalyses(data);
+    } catch (err) {
+      // Silent fail — history is non-critical
+    }
+  }, []);
+
+  // Fetch analyses on mount
+  useEffect(() => {
+    fetchAnalyses();
+  }, [fetchAnalyses]);
 
   const pollResults = useCallback((analysisId) => {
     let attempts = 0;
@@ -31,6 +48,7 @@ export function useAnalysis() {
           setProgress(100);
           setResults(data);
           setStatus('complete');
+          fetchAnalyses();
         } else if (data.status === 'error') {
           stopPolling();
           setError(data.message || 'Analysis failed');
@@ -42,7 +60,7 @@ export function useAnalysis() {
         setStatus('error');
       }
     }, POLL_INTERVAL);
-  }, [stopPolling]);
+  }, [stopPolling, fetchAnalyses]);
 
   const uploadVideo = useCallback(async (file) => {
     try {
@@ -71,6 +89,19 @@ export function useAnalysis() {
     }
   }, [pollResults]);
 
+  const selectAnalysis = useCallback(async (analysisId) => {
+    try {
+      const response = await fetch(`/api/results/${analysisId}`);
+      if (!response.ok) throw new Error('Failed to load analysis');
+      const data = await response.json();
+      setResults(data);
+      setStatus('complete');
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+    }
+  }, []);
+
   const reset = useCallback(() => {
     stopPolling();
     setStatus('idle');
@@ -79,5 +110,15 @@ export function useAnalysis() {
     setProgress(0);
   }, [stopPolling]);
 
-  return { status, results, error, progress, uploadVideo, reset };
+  return {
+    status,
+    results,
+    error,
+    progress,
+    analyses,
+    uploadVideo,
+    selectAnalysis,
+    fetchAnalyses,
+    reset,
+  };
 }

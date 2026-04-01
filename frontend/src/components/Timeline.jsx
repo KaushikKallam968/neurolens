@@ -8,6 +8,12 @@ import { metricColors, metricLabels, hexToRgba } from '../lib/colors';
 
 const ALL_METRICS = Object.keys(metricLabels);
 
+function formatTime(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 function MetricToggle({ metricKey, active, onToggle }) {
   const color = metricColors[metricKey];
   const label = metricLabels[metricKey];
@@ -141,10 +147,16 @@ export default function Timeline({ data, currentTime = 0 }) {
 
             {currentTime > 0 && (
               <ReferenceLine
-                x={currentTime.toFixed(1)}
+                x={`${Math.floor(currentTime)}`}
                 stroke="#00D4FF"
-                strokeWidth={1.5}
-                strokeDasharray="4 4"
+                strokeWidth={2}
+                strokeDasharray="4 3"
+                label={{
+                  value: formatTime(currentTime),
+                  position: 'top',
+                  fill: '#00D4FF',
+                  fontSize: 10,
+                }}
               />
             )}
 

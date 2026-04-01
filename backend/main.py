@@ -123,6 +123,7 @@ async def analyze_video(file: UploadFile = File(...)):
         "error": None,
         "createdAt": time.time(),
         "filename": file.filename,
+        "video_path": str(file_path),
     }
 
     # Run analysis in background thread
@@ -151,15 +152,6 @@ def _run_analysis(analysis_id, video_path):
         results_store[analysis_id]["status"] = "error"
         results_store[analysis_id]["error"] = str(e)
 
-    finally:
-        # Clean up uploaded file after analysis
-        try:
-            if os.path.exists(video_path):
-                os.remove(video_path)
-                logger.info(f"Cleaned up: {video_path}")
-        except OSError as e:
-            logger.warning(f"Failed to clean up {video_path}: {e}")
-
 
 @app.get("/api/results/{analysis_id}")
 async def get_results(analysis_id: str):
@@ -181,6 +173,54 @@ async def get_results(analysis_id: str):
         "error": entry["error"],
         "filename": entry.get("filename"),
     }
+
+
+@app.get("/api/video/{analysis_id}")
+async def get_video(analysis_id: str):
+    """
+    Serve the uploaded video file for playback.
+    """
+    if analysis_id not in results_store:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    entry = results_store[analysis_id]
+    video_path = entry.get("video_path")
+
+    if not video_path or not os.path.exists(video_path):
+        raise HTTPException(status_code=404, detail="Video file not found")
+
+    return FileResponse(
+        video_path,
+        media_type="video/mp4",
+        filename=entry.get("filename", "video.mp4"),
+    )
+
+
+@app.get("/api/analyses")
+async def list_analyses():
+    """
+    Return a list of all completed analyses with summary info.
+    """
+    analyses = []
+    for aid, entry in results_store.items():
+        if entry["status"] != "complete":
+            continue
+
+        neural_score = None
+        if entry.get("data") and entry["data"].get("neuralScore") is not None:
+            neural_score = entry["data"]["neuralScore"]
+
+        analyses.append({
+            "analysisId": aid,
+            "filename": entry.get("filename"),
+            "neuralScore": neural_score,
+            "createdAt": entry.get("createdAt"),
+            "completedAt": entry.get("completedAt"),
+        })
+
+    # Sort by most recent first
+    analyses.sort(key=lambda x: x.get("completedAt") or 0, reverse=True)
+    return analyses
 
 
 @app.get("/api/health")

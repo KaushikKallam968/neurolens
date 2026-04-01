@@ -70,7 +70,25 @@ function buildLabelToMetric(regionMap) {
   return map;
 }
 
-function RealBrain({ metrics, brainData }) {
+function getMetricsAtTime(metrics, timeline, currentTime) {
+  if (!timeline || currentTime <= 0) return metrics;
+
+  const idx = Math.floor(currentTime);
+  const firstKey = Object.keys(timeline)[0];
+  if (!firstKey || !timeline[firstKey] || idx >= timeline[firstKey].length) return metrics;
+
+  const timeMetrics = {};
+  for (const key of Object.keys(metrics)) {
+    if (timeline[key] && idx < timeline[key].length) {
+      timeMetrics[key] = timeline[key][idx];
+    } else {
+      timeMetrics[key] = metrics[key];
+    }
+  }
+  return timeMetrics;
+}
+
+function RealBrain({ metrics, brainData, timeline, currentTime }) {
   const meshRef = useRef();
   const colorsRef = useRef(null);
 
@@ -93,6 +111,7 @@ function RealBrain({ metrics, brainData }) {
   useFrame((state) => {
     if (!colorsRef.current || !metrics) return;
 
+    const activeMetrics = getMetricsAtTime(metrics, timeline, currentTime);
     const colors = colorsRef.current;
     const time = state.clock.elapsedTime;
 
@@ -100,8 +119,8 @@ function RealBrain({ metrics, brainData }) {
       const label = brainData.labels[i];
       const metric = labelToMetric[label];
 
-      if (metric && metrics[metric] !== undefined) {
-        const value = metrics[metric];
+      if (metric && activeMetrics[metric] !== undefined) {
+        const value = activeMetrics[metric];
         const pulse = 0.85 + Math.sin(time * 1.5 + i * 0.001) * 0.15;
         const intensity = value * pulse;
 
@@ -137,7 +156,7 @@ function RealBrain({ metrics, brainData }) {
   );
 }
 
-function BrainScene({ metrics, brainData }) {
+function BrainScene({ metrics, brainData, timeline, currentTime }) {
   return (
     <>
       <ambientLight intensity={0.35} />
@@ -148,7 +167,7 @@ function BrainScene({ metrics, brainData }) {
 
       <Float speed={0.5} rotationIntensity={0.05} floatIntensity={0.15}>
         <group scale={[1.2, 1.2, 1.2]} rotation={[-Math.PI / 2, 0, 0]}>
-          <RealBrain metrics={metrics} brainData={brainData} />
+          <RealBrain metrics={metrics} brainData={brainData} timeline={timeline} currentTime={currentTime} />
         </group>
       </Float>
 
@@ -179,7 +198,7 @@ function FallbackBrain() {
   );
 }
 
-export default function BrainViewer({ metrics }) {
+export default function BrainViewer({ metrics, timeline, currentTime = 0 }) {
   const brainData = useBrainData();
 
   return (
@@ -195,7 +214,7 @@ export default function BrainViewer({ metrics }) {
           gl={{ antialias: true, alpha: true }}
           style={{ background: 'transparent' }}
         >
-          <BrainScene metrics={metrics} brainData={brainData} />
+          <BrainScene metrics={metrics} brainData={brainData} timeline={timeline} currentTime={currentTime} />
         </Canvas>
       ) : (
         <FallbackBrain />
