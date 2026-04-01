@@ -36,6 +36,22 @@ export function useAnalysis() {
     return path;
   }, [gpuUrl]);
 
+  // Auto-verify saved GPU URL on mount — disconnect if unreachable
+  useEffect(() => {
+    if (!gpuUrl) return;
+    const controller = new AbortController();
+    fetch(`${gpuUrl}/api/health`, { signal: controller.signal, mode: 'cors' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => {
+        if (data.status !== 'ok') setGpuUrl(null);
+      })
+      .catch(() => {
+        // GPU unreachable — clear saved URL silently
+        setGpuUrl(null);
+      });
+    return () => controller.abort();
+  }, []); // Only on mount
+
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
