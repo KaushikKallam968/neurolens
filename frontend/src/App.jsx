@@ -22,7 +22,7 @@ import Onboarding from './components/Onboarding';
 export default function App() {
   const {
     status, results, progress, uploadVideo, reset, error,
-    analyses, selectAnalysis, gpuUrl, setGpuUrl, getApiUrl,
+    analyses, selectAnalysis, gpuUrl, gpuSource, setGpuUrl, getApiUrl,
   } = useAnalysis();
   const videoRef = useRef(null);
   const dashboardRef = useRef(null);
@@ -188,7 +188,7 @@ function Header({ onReset, fileName, canCompare, onCompare, showExport, dashboar
       )}
 
       <div className="flex items-center gap-3">
-        <GpuSettings gpuUrl={gpuUrl} setGpuUrl={setGpuUrl} />
+        <GpuSettings gpuUrl={gpuUrl} gpuSource={gpuSource} setGpuUrl={setGpuUrl} />
         {canCompare && (
           <motion.button
             initial={{ opacity: 0, scale: 0.9 }}

@@ -4,7 +4,7 @@ import { Cpu, Check, X, Loader2 } from 'lucide-react';
 
 const STORAGE_KEY = 'neurolens_gpu_url';
 
-export default function GpuSettings({ gpuUrl, setGpuUrl }) {
+export default function GpuSettings({ gpuUrl, gpuSource, setGpuUrl }) {
   const [open, setOpen] = useState(false);
   const [inputUrl, setInputUrl] = useState(gpuUrl || '');
   const [testing, setTesting] = useState(false);
@@ -88,6 +88,11 @@ export default function GpuSettings({ gpuUrl, setGpuUrl }) {
         <span className={connected ? 'text-score-high' : 'text-text-dim'}>
           {connected ? 'GPU' : 'Mock'}
         </span>
+        {connected && gpuSource === 'supabase' && (
+          <span className="px-1 py-0.5 rounded text-[8px] font-mono font-semibold bg-primary/15 text-primary border border-primary/25 leading-none">
+            SB
+          </span>
+        )}
       </button>
 
       {/* Settings panel dropdown */}
@@ -123,8 +128,17 @@ export default function GpuSettings({ gpuUrl, setGpuUrl }) {
                 style={connected ? { boxShadow: '0 0 6px rgba(0, 229, 160, 0.5)' } : {}}
               />
               <span className={`text-xs font-body ${connected ? 'text-score-high' : 'text-score-mid'}`}>
-                {connected ? 'Connected to GPU' : 'Using mock mode'}
+                {connected
+                  ? gpuSource === 'supabase'
+                    ? 'Auto-connected via Supabase'
+                    : 'Connected to GPU'
+                  : 'Using mock mode'}
               </span>
+              {connected && gpuSource === 'supabase' && (
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-primary/15 text-primary border border-primary/25">
+                  Supabase
+                </span>
+              )}
             </div>
 
             {/* URL input */}
