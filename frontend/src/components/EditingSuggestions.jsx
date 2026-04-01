@@ -1,34 +1,34 @@
 import { motion } from 'framer-motion';
-import { AlertTriangle, TrendingUp, Zap, Info } from 'lucide-react';
-import { colors } from '../lib/colors';
+import { AlertTriangle, AlertCircle, Zap } from 'lucide-react';
 
-const typeConfig = {
-  attentionDrop: {
-    label: 'Attention Drop',
-    color: colors.amber,
+const priorityConfig = {
+  critical: {
+    label: 'CRITICAL',
+    color: '#FF5C5C',
     Icon: AlertTriangle,
   },
-  emotionalFlatline: {
-    label: 'Emotional Flatline',
-    color: colors.coral,
-    Icon: AlertTriangle,
+  warning: {
+    label: 'WARNING',
+    color: '#FFB547',
+    Icon: AlertCircle,
   },
-  weakHook: {
-    label: 'Weak Hook',
-    color: colors.orange,
+  strength: {
+    label: 'STRENGTH',
+    color: '#00E5A0',
     Icon: Zap,
   },
-  weakEnding: {
-    label: 'Weak Ending',
-    color: colors.amber,
-    Icon: TrendingUp,
-  },
-  info: {
-    label: 'Insight',
-    color: colors.cyan,
-    Icon: Info,
-  },
 };
+
+const typeToPriority = {
+  attentionDrop: 'critical',
+  weakHook: 'critical',
+  emotionalFlatline: 'warning',
+  weakEnding: 'warning',
+};
+
+function getPriority(type) {
+  return typeToPriority[type] || 'strength';
+}
 
 function formatTimestamp(seconds) {
   const m = Math.floor(seconds / 60);
@@ -36,63 +36,82 @@ function formatTimestamp(seconds) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-function SuggestionCard({ suggestion, index, onSeek }) {
-  const config = typeConfig[suggestion.type] || typeConfig.info;
+function InsightCard({ suggestion, onSeek }) {
+  const priority = getPriority(suggestion.type);
+  const config = priorityConfig[priority];
   const { Icon, color, label } = config;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.05, duration: 0.3 }}
-      className="flex gap-4 p-4 rounded-xl border border-card-border bg-card/30 hover:bg-card/50 transition-colors group"
+    <div
+      className="flex items-start gap-4 py-3 px-4"
+      style={{ borderLeft: `2px solid ${color}` }}
     >
+      {/* Timestamp */}
       <button
         onClick={() => onSeek?.(suggestion.time)}
-        className="shrink-0 px-2.5 py-1 rounded-lg bg-surface text-xs font-mono font-medium text-nl-cyan hover:bg-nl-cyan/10 transition-colors"
+        className="shrink-0 font-mono text-xs bg-depth-2 rounded px-2 py-1 text-primary hover:bg-depth-3 transition-colors cursor-pointer"
       >
         {formatTimestamp(suggestion.time || 0)}
       </button>
 
+      {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <Icon size={13} style={{ color }} />
+          <Icon size={12} style={{ color }} className="shrink-0" />
           <span
-            className="text-xs font-semibold uppercase tracking-wide"
+            className="font-mono text-[10px] tracking-widest font-medium uppercase"
             style={{ color }}
           >
             {label}
           </span>
         </div>
-        <p className="text-sm text-text-secondary leading-relaxed">
+        <p className="text-text-main text-sm leading-relaxed">
           {suggestion.message}
         </p>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
 export default function EditingSuggestions({ suggestions, onSeek }) {
   if (!suggestions?.length) return null;
 
-  const sorted = [...suggestions].sort((a, b) => a.time - b.time);
+  // Sort: critical first, then warning, then strength; within same priority sort by time
+  const priorityOrder = { critical: 0, warning: 1, strength: 2 };
+  const sorted = [...suggestions].sort((a, b) => {
+    const pa = priorityOrder[getPriority(a.type)] ?? 2;
+    const pb = priorityOrder[getPriority(b.type)] ?? 2;
+    if (pa !== pb) return pa - pb;
+    return (a.time || 0) - (b.time || 0);
+  });
+
+  const hasCritical = sorted.some((s) => getPriority(s.type) === 'critical');
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.4, duration: 0.5 }}
-      className="rounded-xl border border-card-border bg-card/30 backdrop-blur-sm p-5"
+      className="bg-depth-1 border border-border rounded-lg p-5"
     >
-      <h3 className="text-sm font-semibold text-text-primary mb-4">
-        Editing Suggestions
+      <h3 className="font-display text-sm font-semibold text-text-bright mb-4">
+        Insights
       </h3>
-      <div className="flex flex-col gap-3 max-h-[400px] overflow-y-auto pr-1">
+
+      {hasCritical && (
+        <div className="flex items-center gap-2 mb-3 px-4 py-2 rounded bg-[rgba(255,92,92,0.06)]">
+          <AlertTriangle size={12} className="text-score-low" />
+          <span className="font-mono text-[10px] tracking-widest text-score-low uppercase">
+            Critical issues detected
+          </span>
+        </div>
+      )}
+
+      <div className="max-h-[400px] overflow-y-auto divide-y divide-border">
         {sorted.map((s, i) => (
-          <SuggestionCard
-            key={`${s.time}-${i}`}
+          <InsightCard
+            key={`${s.time}-${s.type}-${i}`}
             suggestion={s}
-            index={i}
             onSeek={onSeek}
           />
         ))}

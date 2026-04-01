@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { RotateCcw } from 'lucide-react';
 import { useAnalysis } from './hooks/useAnalysis';
@@ -18,6 +18,7 @@ export default function App() {
   } = useAnalysis();
   const videoRef = useRef(null);
   const [currentTime, setCurrentTime] = useState(0);
+  const [phase, setPhase] = useState('idle');
 
   const handleSeek = useCallback((timestamp) => {
     if (videoRef.current) {
@@ -32,40 +33,78 @@ export default function App() {
     }
   }, []);
 
-  const isIdle = status === 'idle';
-  const isProcessing = status === 'uploading' || status === 'processing';
-  const isComplete = status === 'complete' && results;
+  useEffect(() => {
+    if (status === 'idle') {
+      setPhase('idle');
+    } else if (status === 'uploading' || status === 'processing') {
+      setPhase('processing');
+    } else if (status === 'complete' && results) {
+      setPhase('reveal');
+    } else if (status === 'error') {
+      setPhase('idle');
+    }
+  }, [status, results]);
+
+  const handleRevealComplete = useCallback(() => {
+    setPhase('dashboard');
+  }, []);
+
+  const handleReset = useCallback(() => {
+    reset();
+    setPhase('idle');
+  }, [reset]);
+
+  const handleSelectAnalysis = useCallback((analysisId) => {
+    selectAnalysis(analysisId);
+    setPhase('dashboard');
+  }, [selectAnalysis]);
 
   const activeAnalysisId = results?.analysisId || null;
+  const fileName = results?.fileName || null;
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header onReset={isComplete ? reset : null} />
+    <div className="min-h-screen bg-void">
+      <Header
+        onReset={phase === 'dashboard' ? handleReset : null}
+        fileName={phase === 'dashboard' ? fileName : null}
+      />
 
       <AnimatePresence mode="wait">
-        {isProcessing && (
+        {phase === 'processing' && (
           <ProcessingOverlay key="processing" progress={progress} />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence mode="wait">
+        {phase === 'reveal' && results && (
+          <NeuralScore
+            key="reveal"
+            score={results?.data?.neuralScore || 0}
+            verdict={results?.data?.verdict}
+            fullscreen={true}
+            onComplete={handleRevealComplete}
+          />
         )}
       </AnimatePresence>
 
       <main className="max-w-[1440px] mx-auto px-5 pb-12">
         <AnimatePresence mode="wait">
-          {error && <ErrorBanner key="error" message={error} onRetry={reset} />}
+          {error && <ErrorBanner key="error" message={error} onRetry={handleReset} />}
 
-          {isIdle && <Upload key="upload" onUpload={uploadVideo} />}
+          {phase === 'idle' && <Upload key="upload" onUpload={uploadVideo} />}
 
-          {isComplete && (
+          {phase === 'dashboard' && results && (
             <motion.div
               key="dashboard-wrapper"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="mt-6"
+              className="mt-4"
             >
               <AnalysisHistory
                 analyses={analyses}
                 activeId={activeAnalysisId}
-                onSelect={selectAnalysis}
-                onNewAnalysis={reset}
+                onSelect={handleSelectAnalysis}
+                onNewAnalysis={handleReset}
               />
               <Dashboard
                 results={results}
@@ -83,27 +122,36 @@ export default function App() {
   );
 }
 
-function Header({ onReset }) {
+function Header({ onReset, fileName }) {
   return (
-    <header className="flex items-center justify-between px-6 py-4 border-b border-card-border/50">
+    <header className="flex items-center justify-between px-6 py-4 border-b border-border">
       <div className="flex items-center gap-2">
-        <div className="w-2 h-2 rounded-full bg-nl-cyan shadow-[0_0_8px_rgba(0,212,255,0.5)]" />
-        <span className="text-lg font-semibold tracking-tight">
-          <span className="text-text-primary">Neuro</span>
-          <span className="text-nl-cyan">Lens</span>
+        <div className="w-2 h-2 rounded-full bg-primary animate-[pulse-ring_3s_ease-in-out_infinite]" style={{ boxShadow: '0 0 8px rgba(108, 159, 255, 0.5)' }} />
+        <span className="font-display text-lg font-bold" style={{ letterSpacing: '-0.03em' }}>
+          <span className="text-text-bright">Neuro</span>
+          <span className="text-primary">Lens</span>
         </span>
       </div>
-      {onReset && (
-        <motion.button
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          onClick={onReset}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-card-border text-text-secondary text-sm hover:border-nl-cyan/30 hover:text-nl-cyan transition-all"
-        >
-          <RotateCcw size={14} />
-          New Analysis
-        </motion.button>
+
+      {fileName && (
+        <span className="font-mono text-xs text-text-dim truncate max-w-[300px]">
+          {fileName}
+        </span>
       )}
+
+      <div className="flex items-center gap-3">
+        {onReset && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            onClick={onReset}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-text-dim text-sm hover:border-border-active hover:text-primary transition-all font-body"
+          >
+            <RotateCcw size={14} />
+            New Analysis
+          </motion.button>
+        )}
+      </div>
     </header>
   );
 }
@@ -114,12 +162,12 @@ function ErrorBanner({ message, onRetry }) {
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0 }}
-      className="mt-6 p-4 rounded-xl border border-nl-coral/30 bg-nl-coral/5 flex items-center justify-between"
+      className="mt-6 p-4 rounded-xl border border-score-low/30 bg-score-low/5 flex items-center justify-between"
     >
-      <p className="text-sm text-nl-coral">{message}</p>
+      <p className="text-sm text-score-low">{message}</p>
       <button
         onClick={onRetry}
-        className="text-sm text-nl-coral font-medium hover:underline"
+        className="text-sm text-score-low font-medium hover:underline"
       >
         Try Again
       </button>
@@ -136,31 +184,37 @@ function Dashboard({ results, videoRef, onSeek, onTimeUpdate, currentTime, analy
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
-      className="flex flex-col gap-5"
+      className="flex flex-col gap-4 mt-4"
     >
-      {/* Top row: Video | Brain | Score + Metrics */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <VideoPlayer
-          videoRef={videoRef}
-          analysisId={analysisId}
-          onTimeUpdate={onTimeUpdate}
-        />
-        <BrainViewer
-          metrics={metrics}
-          timeline={timeline}
-          currentTime={currentTime}
-        />
-        <div className="flex flex-col gap-5">
-          <NeuralScore score={neuralScore || 0} />
-          <MetricsPanel metrics={metrics} timeline={timeline} />
+      {/* Score compact display */}
+      <NeuralScore score={neuralScore || 0} fullscreen={false} />
+
+      {/* Top row: Video (40%) | Brain (60%) */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        <div className="lg:col-span-2">
+          <VideoPlayer
+            videoRef={videoRef}
+            analysisId={analysisId}
+            onTimeUpdate={onTimeUpdate}
+          />
+        </div>
+        <div className="lg:col-span-3">
+          <BrainViewer
+            metrics={metrics}
+            timeline={timeline}
+            currentTime={currentTime}
+          />
         </div>
       </div>
 
-      {/* Timeline */}
+      {/* Full-width Timeline */}
       <Timeline data={timeline} currentTime={currentTime} />
 
-      {/* Editing Suggestions */}
-      <EditingSuggestions suggestions={suggestions} onSeek={onSeek} />
+      {/* Bottom row: Metrics (left) | Suggestions (right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <MetricsPanel metrics={metrics} timeline={timeline} />
+        <EditingSuggestions suggestions={suggestions} onSeek={onSeek} />
+      </div>
     </motion.div>
   );
 }
@@ -172,7 +226,7 @@ function VideoPlayer({ videoRef, analysisId, onTimeUpdate }) {
     <motion.div
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="rounded-xl border border-card-border bg-card/30 overflow-hidden flex items-center justify-center min-h-[320px]"
+      className="rounded-xl border border-border bg-depth-1/50 overflow-hidden flex items-center justify-center min-h-[320px]"
     >
       {videoUrl ? (
         <video
@@ -180,17 +234,17 @@ function VideoPlayer({ videoRef, analysisId, onTimeUpdate }) {
           src={videoUrl}
           controls
           onTimeUpdate={onTimeUpdate}
-          className="w-full h-full object-contain max-h-[400px] bg-black"
+          className="w-full h-full object-contain max-h-[400px] bg-void"
         />
       ) : (
-        <div className="flex flex-col items-center gap-3 text-text-muted">
-          <div className="w-16 h-16 rounded-full bg-nl-cyan/10 flex items-center justify-center">
-            <svg className="w-8 h-8 text-nl-cyan" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="flex flex-col items-center gap-3 text-text-ghost">
+          <div className="w-16 h-16 rounded-full bg-primary-dim flex items-center justify-center">
+            <svg className="w-8 h-8 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <p className="text-sm">No video available</p>
+          <p className="text-sm font-body">No video available</p>
         </div>
       )}
     </motion.div>

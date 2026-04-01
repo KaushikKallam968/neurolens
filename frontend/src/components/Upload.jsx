@@ -7,6 +7,10 @@ function formatFileSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+const CIRCLE_SIZE = 280;
+const CIRCLE_R = CIRCLE_SIZE / 2 - 4;
+const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * CIRCLE_R;
+
 export default function Upload({ onUpload }) {
   const [file, setFile] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -38,43 +42,21 @@ export default function Upload({ onUpload }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, ease: 'easeOut' }}
-      className="flex flex-col items-center justify-center min-h-[80vh] px-6"
+      className="flex flex-col items-center justify-center min-h-[85vh] px-6"
     >
-      <motion.h1
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="text-5xl font-bold mb-3 tracking-tight"
-      >
-        <span className="text-text-primary">Neuro</span>
-        <span className="text-nl-cyan">Lens</span>
-      </motion.h1>
-
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.35 }}
-        className="text-text-secondary text-lg mb-10"
-      >
-        See how the brain responds to your content
-      </motion.p>
-
+      {/* Circular drop zone */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.45 }}
+        transition={{ delay: 0.2 }}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
-        className={`
-          relative w-full max-w-xl rounded-2xl border-2 border-dashed p-12
-          transition-all duration-300 cursor-pointer group
-          backdrop-blur-sm bg-card/30
-          ${isDragging
-            ? 'border-nl-cyan bg-nl-cyan/5 shadow-[0_0_30px_rgba(0,212,255,0.15)]'
-            : 'border-card-border hover:border-nl-cyan/40 hover:bg-card/50'}
-        `}
         onClick={() => !file && inputRef.current?.click()}
+        className="relative cursor-pointer group"
+        style={{ width: CIRCLE_SIZE, height: CIRCLE_SIZE }}
+        whileHover={{ scale: 1.03 }}
+        whileTap={{ scale: 0.98 }}
       >
         <input
           ref={inputRef}
@@ -84,15 +66,90 @@ export default function Upload({ onUpload }) {
           onChange={(e) => handleFile(e.target.files[0])}
         />
 
-        <AnimatePresence mode="wait">
-          {!file ? (
-            <DropZoneContent isDragging={isDragging} />
-          ) : (
-            <FilePreview file={file} onRemove={() => setFile(null)} />
-          )}
-        </AnimatePresence>
+        {/* SVG circular border */}
+        <svg
+          viewBox={`0 0 ${CIRCLE_SIZE} ${CIRCLE_SIZE}`}
+          className="absolute inset-0 w-full h-full"
+        >
+          <circle
+            cx={CIRCLE_SIZE / 2}
+            cy={CIRCLE_SIZE / 2}
+            r={CIRCLE_R}
+            fill="none"
+            stroke={file ? '#6C9FFF' : isDragging ? 'rgba(108, 159, 255, 0.5)' : 'rgba(58, 74, 99, 0.4)'}
+            strokeWidth={file ? 2 : 1.5}
+            strokeDasharray={file ? 'none' : '8 6'}
+            style={{
+              transition: 'stroke 0.3s ease, stroke-width 0.3s ease, stroke-dasharray 0.3s ease',
+              animation: !file && !isDragging ? 'pulse-ring 3s ease-in-out infinite' : 'none',
+              filter: isDragging ? 'drop-shadow(0 0 12px rgba(108, 159, 255, 0.3))' : file ? 'drop-shadow(0 0 8px rgba(108, 159, 255, 0.2))' : 'none',
+            }}
+          />
+        </svg>
+
+        {/* Circle inner content */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <AnimatePresence mode="wait">
+            {!file ? (
+              <motion.div
+                key="upload-icon"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex flex-col items-center gap-2"
+              >
+                <UploadIcon
+                  size={40}
+                  className="text-text-ghost transition-colors duration-300 group-hover:text-text-dim"
+                />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="file-info"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="flex flex-col items-center gap-2 px-6"
+              >
+                <Film size={36} className="text-primary" />
+                <p className="text-text-bright text-sm font-body font-medium text-center truncate max-w-[200px]">
+                  {file.name}
+                </p>
+                <p className="text-text-dim text-xs font-mono">
+                  {formatFileSize(file.size)}
+                </p>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setFile(null); }}
+                  className="mt-1 p-1 rounded-full hover:bg-depth-3/50 transition-colors"
+                >
+                  <X size={14} className="text-text-ghost hover:text-text-dim" />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </motion.div>
 
+      {/* Text below circle */}
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.4 }}
+        className="font-display text-lg text-text-bright mt-8"
+      >
+        Drop a video. See what the brain sees.
+      </motion.p>
+
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.5 }}
+        className="text-text-dim text-xs mt-2 font-body"
+      >
+        MP4, MOV, WebM — up to 100MB
+      </motion.p>
+
+      {/* Scan button */}
       <AnimatePresence>
         {file && (
           <motion.button
@@ -100,74 +157,14 @@ export default function Upload({ onUpload }) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
             onClick={() => onUpload(file)}
-            className="
-              mt-8 px-10 py-3.5 rounded-xl font-semibold text-base
-              bg-nl-cyan text-background
-              hover:shadow-[0_0_25px_rgba(0,212,255,0.4)]
-              active:scale-[0.98] transition-all duration-200
-            "
+            className="mt-8 px-10 py-3 rounded-full font-display font-semibold text-base text-void bg-primary tracking-wide hover:glow-primary active:scale-[0.98] transition-all duration-200"
+            style={{ boxShadow: '0 0 20px rgba(108, 159, 255, 0.15)' }}
+            whileHover={{ boxShadow: '0 0 30px rgba(108, 159, 255, 0.3)' }}
           >
-            Analyze Video
+            Scan
           </motion.button>
         )}
       </AnimatePresence>
-    </motion.div>
-  );
-}
-
-function DropZoneContent({ isDragging }) {
-  return (
-    <motion.div
-      key="dropzone"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex flex-col items-center gap-4"
-    >
-      <div className={`
-        p-4 rounded-2xl transition-colors duration-300
-        ${isDragging ? 'bg-nl-cyan/10' : 'bg-card/60 group-hover:bg-card'}
-      `}>
-        <UploadIcon
-          size={40}
-          className={`transition-colors duration-300
-            ${isDragging ? 'text-nl-cyan' : 'text-text-muted group-hover:text-nl-cyan/70'}`}
-        />
-      </div>
-      <div className="text-center">
-        <p className="text-text-primary font-medium text-lg">
-          Drop your video here
-        </p>
-        <p className="text-text-muted text-sm mt-1">
-          Supports MP4, MOV, WebM — up to 100MB
-        </p>
-      </div>
-    </motion.div>
-  );
-}
-
-function FilePreview({ file, onRemove }) {
-  return (
-    <motion.div
-      key="preview"
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      className="flex items-center gap-4"
-    >
-      <div className="p-3 rounded-xl bg-nl-cyan/10">
-        <Film size={28} className="text-nl-cyan" />
-      </div>
-      <div className="flex-1 text-left min-w-0">
-        <p className="text-text-primary font-medium truncate">{file.name}</p>
-        <p className="text-text-muted text-sm">{formatFileSize(file.size)}</p>
-      </div>
-      <button
-        onClick={(e) => { e.stopPropagation(); onRemove(); }}
-        className="p-2 rounded-lg hover:bg-white/5 transition-colors"
-      >
-        <X size={18} className="text-text-muted" />
-      </button>
     </motion.div>
   );
 }

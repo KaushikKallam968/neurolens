@@ -1,33 +1,152 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
+import { getScoreColor, getScoreLabel } from '../lib/colors';
 
-const RADIUS = 80;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+const REVEAL_RING_R = 90;
+const REVEAL_RING_CIRCUMFERENCE = 2 * Math.PI * REVEAL_RING_R;
+const COUNT_DURATION = 2000;
+const REVEAL_HOLD = 2500;
 
-function getScoreColor(score) {
-  if (score < 30) return '#FF6B6B';
-  if (score < 50) return '#F59E0B';
-  if (score < 70) return '#00D4FF';
-  return '#10B981';
+export default function NeuralScore({ score = 0, verdict, fullscreen = false, onComplete }) {
+  if (fullscreen) {
+    return (
+      <ScoreReveal
+        score={score}
+        verdict={verdict}
+        onComplete={onComplete}
+      />
+    );
+  }
+
+  return <ScoreCompact score={score} />;
 }
 
-function getScoreLabel(score) {
-  if (score < 30) return 'Low engagement — significant room for improvement';
-  if (score < 50) return 'Moderate engagement with clear optimization opportunities';
-  if (score < 70) return 'Strong emotional engagement with room for attention optimization';
-  if (score < 85) return 'Excellent neural response across most dimensions';
-  return 'Exceptional — peak neural engagement detected';
+function ScoreReveal({ score, verdict, onComplete }) {
+  const [displayScore, setDisplayScore] = useState(0);
+  const [showVerdict, setShowVerdict] = useState(false);
+  const timerRef = useRef(null);
+  const frameRef = useRef(null);
+
+  const color = getScoreColor(score);
+  const ringOffset = REVEAL_RING_CIRCUMFERENCE - (displayScore / 100) * REVEAL_RING_CIRCUMFERENCE;
+  const label = verdict || getScoreLabel(score);
+
+  useEffect(() => {
+    let start = null;
+
+    function animate(timestamp) {
+      if (!start) start = timestamp;
+      const elapsed = timestamp - start;
+      const progress = Math.min(elapsed / COUNT_DURATION, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplayScore(Math.round(eased * score));
+
+      if (progress < 1) {
+        frameRef.current = requestAnimationFrame(animate);
+      } else {
+        setTimeout(() => setShowVerdict(true), 300);
+      }
+    }
+
+    frameRef.current = requestAnimationFrame(animate);
+
+    timerRef.current = setTimeout(() => {
+      if (onComplete) onComplete();
+    }, REVEAL_HOLD + COUNT_DURATION);
+
+    return () => {
+      cancelAnimationFrame(frameRef.current);
+      clearTimeout(timerRef.current);
+    };
+  }, [score, onComplete]);
+
+  const ghostColor = '#3A4A63';
+  const interpolatedColor = displayScore > 0 ? color : ghostColor;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-void"
+    >
+      {/* Score number */}
+      <motion.span
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.6, ease: 'easeOut' }}
+        className="font-display font-black tabular-nums leading-none"
+        style={{
+          fontSize: '120px',
+          color: interpolatedColor,
+          textShadow: `0 0 40px ${color}40, 0 0 80px ${color}20`,
+          transition: 'color 0.3s ease',
+        }}
+      >
+        {displayScore}
+      </motion.span>
+
+      {/* Circular ring */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.3 }}
+        className="mt-6"
+      >
+        <svg
+          viewBox="0 0 200 200"
+          style={{ width: 200, height: 200 }}
+          className="-rotate-90"
+        >
+          <circle
+            cx="100"
+            cy="100"
+            r={REVEAL_RING_R}
+            fill="none"
+            stroke="rgba(58, 74, 99, 0.2)"
+            strokeWidth="3"
+          />
+          <circle
+            cx="100"
+            cy="100"
+            r={REVEAL_RING_R}
+            fill="none"
+            stroke={color}
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeDasharray={REVEAL_RING_CIRCUMFERENCE}
+            strokeDashoffset={ringOffset}
+            style={{
+              transition: 'stroke-dashoffset 0.3s ease-out',
+              filter: `drop-shadow(0 0 10px ${color}50)`,
+            }}
+          />
+        </svg>
+      </motion.div>
+
+      {/* Verdict text */}
+      {showVerdict && (
+        <motion.p
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="mt-6 font-body text-base text-text-main max-w-md text-center leading-relaxed"
+        >
+          {label}
+        </motion.p>
+      )}
+    </motion.div>
+  );
 }
 
-export default function NeuralScore({ score = 0 }) {
+function ScoreCompact({ score }) {
   const [displayScore, setDisplayScore] = useState(0);
   const color = getScoreColor(score);
-  const offset = CIRCUMFERENCE - (displayScore / 100) * CIRCUMFERENCE;
 
   useEffect(() => {
     let frame;
     let start = null;
-    const duration = 1500;
+    const duration = 1200;
 
     function animate(timestamp) {
       if (!start) start = timestamp;
@@ -44,49 +163,30 @@ export default function NeuralScore({ score = 0 }) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.6 }}
-      className="flex flex-col items-center gap-4"
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex flex-col gap-1"
     >
-      <div className="relative w-48 h-48">
-        <svg viewBox="0 0 200 200" className="w-full h-full -rotate-90">
-          <circle
-            cx="100" cy="100" r={RADIUS}
-            fill="none"
-            stroke="rgba(255,255,255,0.05)"
-            strokeWidth="8"
-          />
-          <circle
-            cx="100" cy="100" r={RADIUS}
-            fill="none"
-            stroke={color}
-            strokeWidth="8"
-            strokeLinecap="round"
-            strokeDasharray={CIRCUMFERENCE}
-            strokeDashoffset={offset}
-            style={{
-              transition: 'stroke-dashoffset 0.3s ease-out',
-              filter: `drop-shadow(0 0 8px ${color}40)`,
-            }}
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span
-            className="text-5xl font-bold tabular-nums"
-            style={{ color }}
-          >
-            {displayScore}
-          </span>
-        </div>
+      <div className="flex items-baseline gap-1">
+        <span
+          className="font-display text-3xl font-bold tabular-nums"
+          style={{ color }}
+        >
+          {displayScore}
+        </span>
+        <span className="text-text-dim text-sm">/100</span>
       </div>
-      <div className="text-center">
-        <p className="text-sm font-medium text-text-secondary mb-1">
-          Neural Engagement Score
-        </p>
-        <p className="text-xs text-text-muted max-w-[240px] leading-relaxed">
-          {getScoreLabel(score)}
-        </p>
+      <div className="h-[3px] w-full max-w-[200px] rounded-full bg-depth-3 overflow-hidden">
+        <motion.div
+          className="h-full rounded-full"
+          initial={{ width: 0 }}
+          animate={{ width: `${score}%` }}
+          transition={{ duration: 1.2, ease: 'easeOut' }}
+          style={{
+            backgroundColor: color,
+            boxShadow: `0 0 8px ${color}40`,
+          }}
+        />
       </div>
     </motion.div>
   );

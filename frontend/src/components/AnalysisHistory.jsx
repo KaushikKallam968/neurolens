@@ -1,12 +1,11 @@
-import { motion } from 'framer-motion';
-import { Film, Clock, Plus } from 'lucide-react';
-
+import { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ChevronDown } from 'lucide-react';
+// Score color helper — will import from lib/colors.js when it's updated
 function getScoreColor(score) {
-  if (score == null) return '#6B7280';
-  if (score < 30) return '#FF6B6B';
-  if (score < 50) return '#F59E0B';
-  if (score < 70) return '#00D4FF';
-  return '#10B981';
+  if (score >= 70) return '#00E5A0';
+  if (score >= 45) return '#FFB547';
+  return '#FF5C5C';
 }
 
 function formatRelativeTime(timestamp) {
@@ -18,7 +17,7 @@ function formatRelativeTime(timestamp) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-function truncateFilename(name, maxLen = 18) {
+function truncateFilename(name, maxLen = 24) {
   if (!name) return 'Untitled';
   if (name.length <= maxLen) return name;
   const ext = name.slice(name.lastIndexOf('.'));
@@ -26,92 +25,96 @@ function truncateFilename(name, maxLen = 18) {
   return `${base}...${ext}`;
 }
 
-function AnalysisCard({ analysis, isActive, onSelect }) {
-  const score = analysis.neuralScore;
-  const scoreColor = getScoreColor(score);
+export default function AnalysisHistory({ analyses, activeId, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
 
-  return (
-    <motion.button
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      whileHover={{ scale: 1.03 }}
-      whileTap={{ scale: 0.98 }}
-      onClick={() => onSelect(analysis.analysisId)}
-      className={`
-        shrink-0 flex flex-col gap-2 p-3 rounded-xl border backdrop-blur-sm
-        transition-colors duration-200 text-left min-w-[160px] max-w-[180px]
-        ${isActive
-          ? 'border-nl-cyan bg-nl-cyan/10 shadow-[0_0_12px_rgba(0,212,255,0.15)]'
-          : 'border-card-border bg-card/30 hover:border-card-border-hover hover:bg-card/50'}
-      `}
-    >
-      <div className="flex items-center gap-2">
-        <div className={`p-1.5 rounded-lg ${isActive ? 'bg-nl-cyan/20' : 'bg-card/60'}`}>
-          <Film size={14} className={isActive ? 'text-nl-cyan' : 'text-text-muted'} />
-        </div>
-        <span className="text-xs text-text-primary font-medium truncate">
-          {truncateFilename(analysis.filename)}
-        </span>
-      </div>
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
 
-      <div className="flex items-center justify-between">
-        {score != null ? (
-          <span
-            className="text-lg font-bold tabular-nums"
-            style={{ color: scoreColor }}
-          >
-            {Math.round(score)}
-          </span>
-        ) : (
-          <span className="text-sm text-text-muted">--</span>
-        )}
-
-        <div className="flex items-center gap-1 text-text-muted">
-          <Clock size={10} />
-          <span className="text-[10px]">
-            {formatRelativeTime(analysis.completedAt)}
-          </span>
-        </div>
-      </div>
-    </motion.button>
-  );
-}
-
-export default function AnalysisHistory({ analyses, activeId, onSelect, onNewAnalysis }) {
   if (!analyses || analyses.length < 2) return null;
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: -10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="mb-5 rounded-xl border border-card-border bg-card/20 backdrop-blur-sm p-4"
-    >
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
-          Analysis History
-        </h3>
-        <button
-          onClick={onNewAnalysis}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-            border border-card-border text-text-secondary
-            hover:border-nl-cyan/30 hover:text-nl-cyan transition-all"
-        >
-          <Plus size={12} />
-          New
-        </button>
-      </div>
+  const handleSelect = (analysisId) => {
+    onSelect(analysisId);
+    setOpen(false);
+  };
 
-      <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-thin">
-        {analyses.map((analysis) => (
-          <AnalysisCard
-            key={analysis.analysisId}
-            analysis={analysis}
-            isActive={analysis.analysisId === activeId}
-            onSelect={onSelect}
-          />
-        ))}
-      </div>
-    </motion.div>
+  return (
+    <div className="relative inline-block mb-4" ref={containerRef}>
+      {/* Trigger button */}
+      <button
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex items-center gap-1.5 font-mono text-xs text-text-dim hover:text-text-main transition-colors px-3 py-1.5 rounded-lg border border-border hover:border-border-active"
+      >
+        {analyses.length} scans
+        <ChevronDown
+          size={12}
+          className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {/* Dropdown */}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -4 }}
+            transition={{ duration: 0.15 }}
+            style={{ transformOrigin: 'top left' }}
+            className="absolute top-full left-0 mt-2 z-50 min-w-[280px] max-h-[300px] overflow-y-auto bg-depth-2 border border-border-active rounded-lg shadow-2xl"
+          >
+            {analyses.map((analysis) => {
+              const isActive = analysis.analysisId === activeId;
+              const score = analysis.neuralScore;
+              const scoreColor = score != null ? getScoreColor(Math.round(score)) : '#3A4A63';
+
+              return (
+                <button
+                  key={analysis.analysisId}
+                  onClick={() => handleSelect(analysis.analysisId)}
+                  className={`
+                    w-full flex items-center gap-3 py-3 px-4 text-left transition-colors
+                    hover:bg-depth-3
+                    ${isActive ? 'bg-depth-3 border-l-2 border-l-primary' : 'border-l-2 border-l-transparent'}
+                  `}
+                >
+                  {/* Filename */}
+                  <span className="font-body text-sm text-text-main flex-1 truncate">
+                    {truncateFilename(analysis.filename)}
+                  </span>
+
+                  {/* Score badge */}
+                  {score != null ? (
+                    <span
+                      className="font-display font-bold text-sm tabular-nums"
+                      style={{ color: scoreColor }}
+                    >
+                      {Math.round(score)}
+                    </span>
+                  ) : (
+                    <span className="text-text-ghost text-sm">--</span>
+                  )}
+
+                  {/* Relative time */}
+                  <span className="font-mono text-xs text-text-ghost shrink-0">
+                    {formatRelativeTime(analysis.completedAt)}
+                  </span>
+                </button>
+              );
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }

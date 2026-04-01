@@ -1,79 +1,83 @@
-import { motion } from 'framer-motion';
-import { Brain } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+const STAGES = [
+  { label: 'Extracting visual features', threshold: 25 },
+  { label: 'Mapping audio response', threshold: 50 },
+  { label: 'Predicting neural activation', threshold: 75 },
+  { label: 'Computing engagement score', threshold: 100 },
+];
+
+function getStageIndex(progress) {
+  for (let i = 0; i < STAGES.length; i++) {
+    if (progress < STAGES[i].threshold) return i;
+  }
+  return STAGES.length - 1;
+}
 
 export default function ProcessingOverlay({ progress = 0 }) {
+  const stageIndex = useMemo(() => getStageIndex(progress), [progress]);
+  const currentStage = STAGES[stageIndex];
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-md"
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ backgroundColor: 'rgba(6, 11, 20, 0.95)' }}
     >
-      <div className="flex flex-col items-center gap-8">
-        <PulsingBrain />
-        <div className="text-center">
-          <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="text-xl font-medium text-text-primary mb-2"
-          >
-            Analyzing neural response...
-          </motion.p>
-          <p className="text-text-muted text-sm">
-            Simulating how the brain processes your content
-          </p>
+      {/* Scan line animation */}
+      <div
+        className="absolute inset-0 overflow-hidden pointer-events-none"
+        style={{ opacity: 0.06 }}
+      >
+        <div
+          className="absolute left-0 right-0 h-[1px]"
+          style={{
+            background: 'linear-gradient(90deg, transparent, #6C9FFF, transparent)',
+            animation: 'scan-line 3s linear infinite',
+          }}
+        />
+      </div>
+
+      <div className="flex flex-col items-center gap-10 relative z-10">
+        {/* Stage text */}
+        <div className="h-8 flex items-center justify-center">
+          <AnimatePresence mode="wait">
+            <motion.p
+              key={stageIndex}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.4 }}
+              className="font-display text-lg text-text-bright text-center"
+            >
+              {currentStage.label}
+            </motion.p>
+          </AnimatePresence>
         </div>
-        <ProgressBar progress={progress} />
+
+        {/* Progress bar */}
+        <div className="w-[400px] max-w-[80vw]">
+          <div className="h-[2px] w-full rounded-full bg-depth-3 overflow-hidden">
+            <motion.div
+              className="h-full rounded-full bg-primary"
+              initial={{ width: 0 }}
+              animate={{ width: `${progress}%` }}
+              transition={{ duration: 0.5, ease: 'easeOut' }}
+              style={{
+                boxShadow: '0 0 12px rgba(108, 159, 255, 0.4), 0 0 4px rgba(108, 159, 255, 0.6)',
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Percentage */}
+        <p className="font-mono text-xs text-text-dim">
+          {Math.round(progress)}%
+        </p>
       </div>
     </motion.div>
-  );
-}
-
-function PulsingBrain() {
-  return (
-    <div className="relative">
-      {[0, 1, 2].map((i) => (
-        <motion.div
-          key={i}
-          className="absolute inset-0 rounded-full border border-nl-cyan/30"
-          initial={{ scale: 1, opacity: 0.5 }}
-          animate={{ scale: 1.8 + i * 0.4, opacity: 0 }}
-          transition={{
-            duration: 2,
-            repeat: Infinity,
-            delay: i * 0.6,
-            ease: 'easeOut',
-          }}
-          style={{ width: 80, height: 80, top: -8, left: -8 }}
-        />
-      ))}
-      <motion.div
-        animate={{ scale: [1, 1.08, 1] }}
-        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-        className="relative z-10 w-16 h-16 rounded-full bg-nl-cyan/10 flex items-center justify-center"
-      >
-        <Brain size={32} className="text-nl-cyan" />
-      </motion.div>
-    </div>
-  );
-}
-
-function ProgressBar({ progress }) {
-  return (
-    <div className="w-64">
-      <div className="flex justify-between text-xs text-text-muted mb-2">
-        <span>Processing</span>
-        <span>{Math.round(progress)}%</span>
-      </div>
-      <div className="h-1.5 bg-card rounded-full overflow-hidden">
-        <motion.div
-          className="h-full bg-gradient-to-r from-nl-cyan to-nl-purple rounded-full"
-          initial={{ width: 0 }}
-          animate={{ width: `${progress}%` }}
-          transition={{ duration: 0.5, ease: 'easeOut' }}
-        />
-      </div>
-    </div>
   );
 }

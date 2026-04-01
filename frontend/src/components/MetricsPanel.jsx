@@ -4,6 +4,17 @@ import {
 } from 'lucide-react';
 import { metricColors, metricLabels, hexToRgba } from '../lib/colors';
 
+// Descriptions for each metric — will move to lib/colors.js when it's updated
+const metricDescriptions = {
+  emotionalResonance: 'How strongly the content triggers emotional brain regions',
+  attentionFocus: 'Active engagement and focus from prefrontal cortex',
+  memorability: 'Hippocampal encoding — likelihood of being remembered',
+  narrativeComprehension: 'Language processing and narrative understanding',
+  faceImpact: 'Fusiform face area activation from on-screen faces',
+  sceneImpact: 'Visual cortex response to environments and scenes',
+  motionEnergy: 'Neural response to dynamic movement and kinetic energy',
+};
+
 const metricIcons = {
   emotionalResonance: Heart,
   attentionFocus: Eye,
@@ -14,7 +25,7 @@ const metricIcons = {
   motionEnergy: Zap,
 };
 
-function Sparkline({ data, color, width = 80, height = 24 }) {
+function Sparkline({ data, color, width = 60, height = 24 }) {
   if (!data || data.length < 2) return null;
 
   const max = Math.max(...data);
@@ -27,7 +38,7 @@ function Sparkline({ data, color, width = 80, height = 24 }) {
     .join(' ');
 
   return (
-    <svg width={width} height={height} className="opacity-60">
+    <svg width={width} height={height} className="shrink-0 opacity-60">
       <polyline
         points={points}
         fill="none"
@@ -44,6 +55,7 @@ function MetricCard({ metricKey, value, timeline, index }) {
   const Icon = metricIcons[metricKey];
   const color = metricColors[metricKey];
   const label = metricLabels[metricKey];
+  const description = metricDescriptions[metricKey];
   const displayValue = Math.round(value * 100);
 
   const fullData = timeline?.[metricKey] || [];
@@ -53,32 +65,46 @@ function MetricCard({ metricKey, value, timeline, index }) {
     <motion.div
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.06, duration: 0.4 }}
-      className="relative rounded-xl border border-card-border bg-card/40 backdrop-blur-sm p-4 overflow-hidden group hover:border-card-border-hover transition-colors"
+      transition={{ delay: index * 0.05, duration: 0.4 }}
+      className="bg-depth-1 border border-border rounded-lg p-4 group hover:border-border-active transition-all duration-300 cursor-default"
+      style={{
+        '--card-glow': hexToRgba(color, 0.06),
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = `inset 0 0 30px ${hexToRgba(color, 0.06)}`;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = 'none';
+      }}
     >
-      <div
-        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-        style={{
-          background: `radial-gradient(circle at 20% 50%, ${hexToRgba(color, 0.06)}, transparent 70%)`,
-        }}
-      />
+      <div className="flex items-start justify-between">
+        <div className="flex-1 min-w-0">
+          {/* Top row: icon + label */}
+          <div className="flex items-center gap-2 mb-3">
+            <Icon size={16} style={{ color }} className="shrink-0" />
+            <span className="font-body text-xs font-medium uppercase tracking-widest text-text-dim">
+              {label}
+            </span>
+          </div>
 
-      <div className="relative z-10 flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div
-            className="p-2 rounded-lg"
-            style={{ backgroundColor: hexToRgba(color, 0.1) }}
-          >
-            <Icon size={16} style={{ color }} />
-          </div>
-          <div>
-            <p className="text-xs text-text-muted">{label}</p>
-            <p className="text-2xl font-bold mt-0.5" style={{ color }}>
+          {/* Score */}
+          <div className="flex items-baseline gap-1 mb-2">
+            <span className="font-display text-3xl font-bold" style={{ color }}>
               {displayValue}
-            </p>
+            </span>
+            <span className="text-text-ghost text-sm">/100</span>
           </div>
+
+          {/* Description */}
+          <p className="text-text-dim text-xs leading-relaxed">
+            {description}
+          </p>
         </div>
-        <Sparkline data={sparklineData} color={color} />
+
+        {/* Sparkline on right */}
+        <div className="ml-3 mt-6">
+          <Sparkline data={sparklineData} color={color} />
+        </div>
       </div>
     </motion.div>
   );
@@ -90,7 +116,7 @@ export default function MetricsPanel({ metrics, timeline }) {
   const metricKeys = Object.keys(metricLabels);
 
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
       {metricKeys.map((key, i) => (
         <MetricCard
           key={key}
