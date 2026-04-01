@@ -123,13 +123,27 @@ def generate_mock_results(video_path=None, duration=None):
     neural_score = _compute_mock_score(timeline)
 
     metrics = _compute_metrics_summary(timeline)
+    sensory = _generate_sensory_breakdown(duration)
+    cognitive_load = _compute_cognitive_load(timeline)
+    focus_score = _compute_focus_score(timeline)
+    narrative_arc = _generate_narrative_arc(timeline)
+    av_sync = _compute_av_sync(sensory)
+    key_moments = _generate_key_moments(timeline, peaks, duration)
+    percentile = min(99, max(5, neural_score + np.random.randint(-10, 10)))
 
     return {
         "neuralScore": neural_score,
+        "percentile": int(percentile),
         "metrics": metrics,
         "timeline": timeline,
+        "sensoryTimeline": sensory,
+        "cognitiveLoad": cognitive_load,
+        "focusScore": focus_score,
+        "narrativeArc": narrative_arc,
+        "avSyncScore": av_sync,
+        "keyMoments": key_moments,
         "peaks": peaks,
-        "suggestions": suggestions,
+        "suggestions": _generate_smart_suggestions(timeline, dip_time, duration, peaks),
     }
 
 
@@ -217,6 +231,164 @@ def _generate_mock_suggestions(timeline, dip_time, duration):
             "time": round(float(len(attention) - 2), 1),
             "type": "weakEnding",
             "message": "Attention fades at the end — add a strong CTA or closing hook",
+        })
+
+    suggestions.sort(key=lambda s: s["time"])
+    return suggestions
+
+
+def _generate_sensory_breakdown(duration):
+    """Generate per-second sensory channel contribution (visual/audio/language)."""
+    visual = _smooth_wave(duration, 0.06, 0.15, 0.0, 0.03) + 0.35
+    audio = _smooth_wave(duration, 0.08, 0.12, 1.5, 0.03) + 0.30
+    language = _smooth_wave(duration, 0.04, 0.10, 3.0, 0.02) + 0.20
+
+    total = visual + audio + language
+    return {
+        "visual": _safe_list(visual / total),
+        "audio": _safe_list(audio / total),
+        "language": _safe_list(language / total),
+    }
+
+
+def _compute_cognitive_load(timeline):
+    """Derive cognitive load from frontal activation patterns."""
+    attention = np.array(timeline["attentionFocus"])
+    comprehension = np.array(timeline["narrativeComprehension"])
+    raw = 0.6 * attention + 0.4 * comprehension
+    mean_load = float(np.mean(raw))
+    return {
+        "score": int(round(mean_load * 100)),
+        "timeline": _safe_list(raw),
+        "label": "Easy to process" if mean_load < 0.45 else "Moderate complexity" if mean_load < 0.65 else "High cognitive demand",
+    }
+
+
+def _compute_focus_score(timeline):
+    """Compute attention focus vs scatter."""
+    attention = np.array(timeline["attentionFocus"])
+    std = float(np.std(attention))
+    focus = max(0, min(1, 1.0 - std * 3))
+    return {
+        "score": int(round(focus * 100)),
+        "label": "Scattered" if focus < 0.4 else "Moderate focus" if focus < 0.65 else "Highly focused",
+    }
+
+
+def _generate_narrative_arc(timeline):
+    """Generate the emotional narrative arc of the content."""
+    emotion = np.array(timeline["emotionalResonance"])
+    attention = np.array(timeline["attentionFocus"])
+    arc = 0.6 * emotion + 0.4 * attention
+
+    kernel = np.ones(3) / 3
+    if len(arc) > 3:
+        arc = np.convolve(arc, kernel, mode='same')
+
+    return {
+        "curve": _safe_list(arc),
+        "hookStrength": round(float(np.mean(arc[:3])), 3) if len(arc) >= 3 else 0,
+        "climaxTime": int(np.argmax(arc)),
+        "climaxValue": round(float(np.max(arc)), 3),
+        "endingStrength": round(float(np.mean(arc[-3:])), 3) if len(arc) >= 3 else 0,
+    }
+
+
+def _compute_av_sync(sensory):
+    """Compute audio-visual synchronization score."""
+    visual = np.array(sensory["visual"])
+    audio = np.array(sensory["audio"])
+    if len(visual) < 2:
+        return {"score": 50, "label": "Insufficient data"}
+    corr = float(np.corrcoef(visual, audio)[0, 1])
+    score = int(round((corr + 1) / 2 * 100))
+    return {
+        "score": max(0, min(100, score)),
+        "label": "Strong sync" if score > 65 else "Moderate sync" if score > 40 else "Audio and visuals are misaligned",
+    }
+
+
+def _generate_key_moments(timeline, peaks, duration):
+    """Generate key moment entries with timestamps and types."""
+    moments = []
+    emotion = timeline["emotionalResonance"]
+    attention = timeline["attentionFocus"]
+
+    if len(emotion) >= 3 and max(emotion[:3]) > 0.6:
+        moments.append({"time": 1, "type": "hookSuccess", "label": "Strong hook", "value": round(max(emotion[:3]), 2)})
+    elif len(emotion) >= 3:
+        moments.append({"time": 0, "type": "hookWeak", "label": "Weak hook", "value": round(max(emotion[:3]), 2)})
+
+    if peaks:
+        top_peak = max(peaks, key=lambda p: p["value"])
+        moments.append({"time": top_peak["time"], "type": "peakEngagement", "label": "Peak engagement", "value": top_peak["value"]})
+
+    for i in range(1, len(attention)):
+        if attention[i] < 0.35 and (i == 1 or attention[i - 1] > 0.5):
+            moments.append({"time": i, "type": "attentionDrop", "label": "Attention drops", "value": round(attention[i], 2)})
+            break
+
+    if len(emotion) >= 2 and emotion[-1] > 0.6:
+        moments.append({"time": len(emotion) - 1, "type": "strongEnding", "label": "Strong ending", "value": round(emotion[-1], 2)})
+
+    moments.sort(key=lambda m: m["time"])
+    return moments[:6]
+
+
+def _generate_smart_suggestions(timeline, dip_time, duration, peaks):
+    """Generate specific, actionable suggestions with recommended actions."""
+    suggestions = []
+    attention = timeline["attentionFocus"]
+    emotion = timeline["emotionalResonance"]
+    memory = timeline["memorability"]
+
+    if dip_time < len(attention):
+        suggestions.append({
+            "time": round(float(dip_time), 1),
+            "type": "attentionDrop",
+            "severity": "critical",
+            "message": "Attention drops significantly here",
+            "action": "Add a visual cut, text overlay, or scene change to re-engage viewers",
+        })
+
+    for i in range(2, len(emotion)):
+        if all(emotion[j] < 0.35 for j in range(i - 2, i + 1)):
+            if not any(s["type"] == "emotionalFlatline" for s in suggestions):
+                suggestions.append({
+                    "time": round(float(i - 1), 1),
+                    "type": "emotionalFlatline",
+                    "severity": "warning",
+                    "message": "Emotional engagement is flat for 3+ seconds",
+                    "action": "Introduce a face, music change, or story beat to reignite emotion",
+                })
+            break
+
+    if len(memory) >= 3 and all(memory[j] < 0.35 for j in range(min(3, len(memory)))):
+        suggestions.append({
+            "time": 0.0,
+            "type": "weakHook",
+            "severity": "critical",
+            "message": "Opening isn't memorable — viewers likely scroll past",
+            "action": "Lead with a surprising visual, bold statement, or pattern interrupt in the first 1.5 seconds",
+        })
+
+    if len(attention) >= 2 and all(attention[j] < 0.4 for j in range(max(0, len(attention) - 2), len(attention))):
+        suggestions.append({
+            "time": round(float(len(attention) - 2), 1),
+            "type": "weakEnding",
+            "severity": "warning",
+            "message": "Attention fades at the end",
+            "action": "Add a strong CTA, callback to the hook, or cliffhanger to drive rewatches and shares",
+        })
+
+    if peaks:
+        top = max(peaks, key=lambda p: p["value"])
+        suggestions.append({
+            "time": top["time"],
+            "type": "peakStrength",
+            "severity": "strength",
+            "message": f"Peak engagement at this moment ({top['label'].lower()})",
+            "action": "This is your strongest moment — consider building your CTA or key message around this timestamp",
         })
 
     suggestions.sort(key=lambda s: s["time"])

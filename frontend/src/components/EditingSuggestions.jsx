@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
-import { AlertTriangle, AlertCircle, Zap } from 'lucide-react';
+import { AlertTriangle, AlertCircle, Zap, ArrowRight } from 'lucide-react';
 
-const priorityConfig = {
+const severityConfig = {
   critical: {
     label: 'CRITICAL',
     color: '#FF5C5C',
@@ -19,15 +19,15 @@ const priorityConfig = {
   },
 };
 
-const typeToPriority = {
-  attentionDrop: 'critical',
-  weakHook: 'critical',
-  emotionalFlatline: 'warning',
-  weakEnding: 'warning',
-};
-
-function getPriority(type) {
-  return typeToPriority[type] || 'strength';
+function getSeverity(suggestion) {
+  if (suggestion.severity) return suggestion.severity;
+  const typeToPriority = {
+    attentionDrop: 'critical',
+    weakHook: 'critical',
+    emotionalFlatline: 'warning',
+    weakEnding: 'warning',
+  };
+  return typeToPriority[suggestion.type] || 'strength';
 }
 
 function formatTimestamp(seconds) {
@@ -37,8 +37,8 @@ function formatTimestamp(seconds) {
 }
 
 function InsightCard({ suggestion, onSeek }) {
-  const priority = getPriority(suggestion.type);
-  const config = priorityConfig[priority];
+  const severity = getSeverity(suggestion);
+  const config = severityConfig[severity] || severityConfig.strength;
   const { Icon, color, label } = config;
 
   return (
@@ -68,6 +68,12 @@ function InsightCard({ suggestion, onSeek }) {
         <p className="text-text-main text-sm leading-relaxed">
           {suggestion.message}
         </p>
+        {suggestion.action && (
+          <p className="text-text-dim text-xs italic mt-1 flex items-center gap-1">
+            <ArrowRight size={10} className="shrink-0" />
+            {suggestion.action}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -79,13 +85,13 @@ export default function EditingSuggestions({ suggestions, onSeek }) {
   // Sort: critical first, then warning, then strength; within same priority sort by time
   const priorityOrder = { critical: 0, warning: 1, strength: 2 };
   const sorted = [...suggestions].sort((a, b) => {
-    const pa = priorityOrder[getPriority(a.type)] ?? 2;
-    const pb = priorityOrder[getPriority(b.type)] ?? 2;
+    const pa = priorityOrder[getSeverity(a)] ?? 2;
+    const pb = priorityOrder[getSeverity(b)] ?? 2;
     if (pa !== pb) return pa - pb;
     return (a.time || 0) - (b.time || 0);
   });
 
-  const hasCritical = sorted.some((s) => getPriority(s.type) === 'critical');
+  const hasCritical = sorted.some((s) => getSeverity(s) === 'critical');
 
   return (
     <motion.div

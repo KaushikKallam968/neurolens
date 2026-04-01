@@ -10,6 +10,10 @@ import Timeline from './components/Timeline';
 import BrainViewer from './components/BrainViewer';
 import EditingSuggestions from './components/EditingSuggestions';
 import AnalysisHistory from './components/AnalysisHistory';
+import ScoreSummaryBar from './components/ScoreSummaryBar';
+import SensoryBreakdown from './components/SensoryBreakdown';
+import NarrativeArc from './components/NarrativeArc';
+import KeyMoments from './components/KeyMoments';
 
 export default function App() {
   const {
@@ -177,7 +181,11 @@ function ErrorBanner({ message, onRetry }) {
 
 function Dashboard({ results, videoRef, onSeek, onTimeUpdate, currentTime, analysisId }) {
   const data = results?.data || {};
-  const { neuralScore, metrics, timeline, peaks, suggestions } = data;
+  const {
+    neuralScore, percentile, metrics, timeline,
+    sensoryTimeline, cognitiveLoad, focusScore,
+    narrativeArc, avSyncScore, keyMoments, suggestions,
+  } = data;
 
   return (
     <motion.div
@@ -186,10 +194,16 @@ function Dashboard({ results, videoRef, onSeek, onTimeUpdate, currentTime, analy
       transition={{ duration: 0.5 }}
       className="flex flex-col gap-4 mt-4"
     >
-      {/* Score compact display */}
-      <NeuralScore score={neuralScore || 0} fullscreen={false} />
+      {/* Tier 1: Score summary bar */}
+      <ScoreSummaryBar
+        neuralScore={neuralScore}
+        percentile={percentile}
+        cognitiveLoad={cognitiveLoad}
+        focusScore={focusScore}
+        avSyncScore={avSyncScore}
+      />
 
-      {/* Top row: Video (40%) | Brain (60%) */}
+      {/* Tier 2: Video + Brain + Sensory + Timeline */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         <div className="lg:col-span-2">
           <VideoPlayer
@@ -207,13 +221,23 @@ function Dashboard({ results, videoRef, onSeek, onTimeUpdate, currentTime, analy
         </div>
       </div>
 
-      {/* Full-width Timeline */}
+      <SensoryBreakdown
+        sensoryTimeline={sensoryTimeline}
+        currentTime={currentTime}
+      />
+
       <Timeline data={timeline} currentTime={currentTime} />
 
-      {/* Bottom row: Metrics (left) | Suggestions (right) */}
+      {/* Tier 3: Metrics + Insights + Key Moments + Narrative */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <MetricsPanel metrics={metrics} timeline={timeline} />
-        <EditingSuggestions suggestions={suggestions} onSeek={onSeek} />
+        <div className="flex flex-col gap-4">
+          <MetricsPanel metrics={metrics} timeline={timeline} />
+          <NarrativeArc narrativeArc={narrativeArc} />
+        </div>
+        <div className="flex flex-col gap-4">
+          <KeyMoments keyMoments={keyMoments} onSeek={onSeek} />
+          <EditingSuggestions suggestions={suggestions} onSeek={onSeek} />
+        </div>
       </div>
     </motion.div>
   );
@@ -233,8 +257,11 @@ function VideoPlayer({ videoRef, analysisId, onTimeUpdate }) {
           ref={videoRef}
           src={videoUrl}
           controls
+          preload="auto"
+          playsInline
           onTimeUpdate={onTimeUpdate}
           className="w-full h-full object-contain max-h-[400px] bg-void"
+          style={{ minHeight: '200px' }}
         />
       ) : (
         <div className="flex flex-col items-center gap-3 text-text-ghost">
