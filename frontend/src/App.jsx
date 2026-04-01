@@ -99,6 +99,7 @@ export default function App() {
         dashboardRef={dashboardRef}
         score={results?.data?.neuralScore}
         gpuUrl={gpuUrl}
+        gpuSource={gpuSource}
         setGpuUrl={setGpuUrl}
       />
 
@@ -170,7 +171,7 @@ export default function App() {
   );
 }
 
-function Header({ onReset, fileName, canCompare, onCompare, showExport, dashboardRef, score, gpuUrl, setGpuUrl }) {
+function Header({ onReset, fileName, canCompare, onCompare, showExport, dashboardRef, score, gpuUrl, gpuSource, setGpuUrl }) {
   return (
     <header className="flex items-center justify-between px-6 py-4 border-b border-border">
       <div className="flex items-center gap-2">
