@@ -1,9 +1,9 @@
 import { useRef, useMemo, useState, useEffect } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, Float } from '@react-three/drei';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { OrbitControls, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { motion } from 'framer-motion';
-import { metricColors } from '../lib/colors';
+import { metricColors, metricLabels, hexToRgba } from '../lib/colors';
 
 const METRIC_REGION_COLORS = {
   attentionFocus: new THREE.Color(metricColors.attentionFocus),
@@ -15,7 +15,20 @@ const METRIC_REGION_COLORS = {
   motionEnergy: new THREE.Color(metricColors.motionEnergy),
 };
 
-const BASE_COLOR = new THREE.Color('#1a2a44');
+const BASE_COLOR = new THREE.Color('#0e1a2e');
+const DIM_COLOR = new THREE.Color('#0a1220');
+
+// Approximate 3D positions for each metric's label on the brain surface
+// These are in the brain's local space (after rotation)
+const REGION_LABELS = [
+  { metric: 'attentionFocus', label: 'Attention', pos: [0, 0.6, 0.9] },
+  { metric: 'emotionalResonance', label: 'Emotion', pos: [-0.7, 0.1, 0.5] },
+  { metric: 'memorability', label: 'Memory', pos: [0.7, 0.0, 0.3] },
+  { metric: 'narrativeComprehension', label: 'Language', pos: [-0.9, 0.2, -0.3] },
+  { metric: 'faceImpact', label: 'Faces', pos: [0.5, -0.5, -0.2] },
+  { metric: 'sceneImpact', label: 'Vision', pos: [0, 0.3, -1.0] },
+  { metric: 'motionEnergy', label: 'Motion', pos: [0, 0.9, 0.1] },
+];
 
 function useBrainData() {
   const [data, setData] = useState(null);
@@ -129,17 +142,16 @@ function RealBrain({ metrics, brainData, timeline, currentTime }) {
         colors[i * 3 + 1] = BASE_COLOR.g + (regionColor.g - BASE_COLOR.g) * intensity;
         colors[i * 3 + 2] = BASE_COLOR.b + (regionColor.b - BASE_COLOR.b) * intensity;
       } else {
-        colors[i * 3] = BASE_COLOR.r;
-        colors[i * 3 + 1] = BASE_COLOR.g;
-        colors[i * 3 + 2] = BASE_COLOR.b;
+        // Unassigned regions — very dim so metric regions stand out
+        colors[i * 3] = DIM_COLOR.r;
+        colors[i * 3 + 1] = DIM_COLOR.g;
+        colors[i * 3 + 2] = DIM_COLOR.b;
       }
     }
 
     geometry.attributes.color.needsUpdate = true;
 
-    if (meshRef.current) {
-      meshRef.current.rotation.y += 0.002;
-    }
+    // No auto-rotation — user controls the brain position
   });
 
   return (
@@ -156,26 +168,72 @@ function RealBrain({ metrics, brainData, timeline, currentTime }) {
   );
 }
 
+function RegionLabel({ region, value }) {
+  const color = metricColors[region.metric];
+  const pct = Math.round((value || 0) * 100);
+
+  return (
+    <group position={region.pos}>
+      <Html
+        center
+        distanceFactor={4}
+        style={{ pointerEvents: 'none', userSelect: 'none' }}
+      >
+        <div
+          className="flex items-center gap-1.5 px-2 py-1 rounded whitespace-nowrap"
+          style={{
+            background: 'rgba(6, 11, 20, 0.85)',
+            border: `1px solid ${hexToRgba(color, 0.3)}`,
+            boxShadow: `0 0 8px ${hexToRgba(color, 0.15)}`,
+          }}
+        >
+          <div
+            className="w-1.5 h-1.5 rounded-full shrink-0"
+            style={{ backgroundColor: color, boxShadow: `0 0 4px ${color}` }}
+          />
+          <span
+            className="font-mono text-[9px] font-medium tracking-wide uppercase"
+            style={{ color }}
+          >
+            {region.label}
+          </span>
+          <span className="font-mono text-[9px] text-text-dim">
+            {pct}
+          </span>
+        </div>
+      </Html>
+    </group>
+  );
+}
+
 function BrainScene({ metrics, brainData, timeline, currentTime }) {
+  const activeMetrics = getMetricsAtTime(metrics, timeline, currentTime);
+
   return (
     <>
       <ambientLight intensity={0.35} />
       <directionalLight position={[3, 4, 5]} intensity={0.7} color="#88aaff" />
       <directionalLight position={[-3, -1, -4]} intensity={0.35} color="#aa88ff" />
-      <pointLight position={[0, 0, 4]} intensity={0.3} color="#00D4FF" distance={10} />
+      <pointLight position={[0, 0, 4]} intensity={0.3} color="#6C9FFF" distance={10} />
       <pointLight position={[0, 3, -2]} intensity={0.3} color="#6644cc" distance={8} />
 
-      <Float speed={0.5} rotationIntensity={0.05} floatIntensity={0.15}>
-        <group scale={[1.2, 1.2, 1.2]} rotation={[-Math.PI / 2, 0, 0]}>
-          <RealBrain metrics={metrics} brainData={brainData} timeline={timeline} currentTime={currentTime} />
-        </group>
-      </Float>
+      <group scale={[1.2, 1.2, 1.2]} rotation={[-Math.PI / 2, 0, 0]}>
+        <RealBrain metrics={metrics} brainData={brainData} timeline={timeline} currentTime={currentTime} />
+
+        {/* Floating labels on brain regions */}
+        {REGION_LABELS.map((region) => (
+          <RegionLabel
+            key={region.metric}
+            region={region}
+            value={activeMetrics?.[region.metric]}
+          />
+        ))}
+      </group>
 
       <OrbitControls
         enableZoom={true}
         enablePan={false}
-        autoRotate
-        autoRotateSpeed={0.3}
+        autoRotate={false}
         minPolarAngle={Math.PI / 5}
         maxPolarAngle={Math.PI * 4 / 5}
         minDistance={2}
@@ -189,24 +247,52 @@ function FallbackBrain() {
   return (
     <div className="flex items-center justify-center h-full">
       <div className="text-center">
-        <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-nl-cyan/10 flex items-center justify-center">
-          <div className="w-3 h-3 rounded-full bg-nl-cyan animate-pulse" />
+        <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-primary-dim flex items-center justify-center">
+          <div className="w-3 h-3 rounded-full bg-primary animate-pulse" />
         </div>
-        <p className="text-xs text-text-muted">Loading brain mesh...</p>
+        <p className="text-xs text-text-dim">Loading brain mesh...</p>
       </div>
+    </div>
+  );
+}
+
+function BrainLegend({ metrics }) {
+  if (!metrics) return null;
+
+  return (
+    <div className="absolute bottom-3 left-3 flex flex-col gap-1">
+      {Object.entries(metricLabels).map(([key, label]) => {
+        const color = metricColors[key];
+        const value = Math.round((metrics[key] || 0) * 100);
+        return (
+          <div key={key} className="flex items-center gap-1.5">
+            <div
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ backgroundColor: color, boxShadow: `0 0 4px ${hexToRgba(color, 0.5)}` }}
+            />
+            <span className="font-mono text-[10px] text-text-dim leading-none">
+              {label}
+            </span>
+            <span className="font-mono text-[10px] font-medium leading-none" style={{ color }}>
+              {value}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 export default function BrainViewer({ metrics, timeline, currentTime = 0 }) {
   const brainData = useBrainData();
+  const activeMetrics = getMetricsAtTime(metrics, timeline, currentTime);
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ delay: 0.2, duration: 0.8 }}
-      className="rounded-xl border border-card-border bg-card/20 overflow-hidden h-full min-h-[320px]"
+      className="relative rounded-lg border border-border bg-depth-1 overflow-hidden h-full min-h-[320px]"
     >
       {brainData ? (
         <Canvas
@@ -219,6 +305,9 @@ export default function BrainViewer({ metrics, timeline, currentTime = 0 }) {
       ) : (
         <FallbackBrain />
       )}
+
+      {/* HTML overlay legend — always visible, not inside Three.js */}
+      <BrainLegend metrics={activeMetrics} />
     </motion.div>
   );
 }
