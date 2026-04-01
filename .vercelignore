@@ -1,0 +1,7 @@
+vendor/
+frontend/node_modules/
+backend/uploads/
+backend/cache/
+__pycache__/
+*.pyc
+.git/

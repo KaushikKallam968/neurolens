@@ -79,6 +79,17 @@ export function useAnalysis() {
       if (!response.ok) throw new Error('Upload failed');
 
       const data = await response.json();
+
+      if (data.instant && data.status === 'complete') {
+        // Vercel serverless — results came back immediately
+        setResults(data);
+        setStatus('complete');
+        setProgress(100);
+        fetchAnalyses();
+        return data.analysisId;
+      }
+
+      // Local backend — poll for async results
       setStatus('processing');
       pollResults(data.analysisId);
       return data.analysisId;
