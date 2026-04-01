@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { RotateCcw, GitCompare } from 'lucide-react';
 import { useAnalysis } from './hooks/useAnalysis';
 import Upload from './components/Upload';
+import GpuSettings from './components/GpuSettings';
 import ProcessingOverlay from './components/ProcessingOverlay';
 import NeuralScore from './components/NeuralScore';
 import MetricsPanel from './components/MetricsPanel';
@@ -21,7 +22,7 @@ import Onboarding from './components/Onboarding';
 export default function App() {
   const {
     status, results, progress, uploadVideo, reset, error,
-    analyses, selectAnalysis,
+    analyses, selectAnalysis, gpuUrl, setGpuUrl, getApiUrl,
   } = useAnalysis();
   const videoRef = useRef(null);
   const dashboardRef = useRef(null);
@@ -74,15 +75,15 @@ export default function App() {
     try {
       const [first, second] = analyses.slice(0, 2);
       const [resA, resB] = await Promise.all([
-        fetch(`/api/results/${first.analysisId}`).then((r) => r.json()),
-        fetch(`/api/results/${second.analysisId}`).then((r) => r.json()),
+        fetch(getApiUrl(`/api/results/${first.analysisId}`)).then((r) => r.json()),
+        fetch(getApiUrl(`/api/results/${second.analysisId}`)).then((r) => r.json()),
       ]);
       setCompareData({ a: resA, b: resB });
       setCompareMode(true);
     } catch (err) {
       console.error('Compare fetch failed:', err);
     }
-  }, [analyses]);
+  }, [analyses, getApiUrl]);
 
   const activeAnalysisId = results?.analysisId || null;
   const fileName = results?.fileName || null;
@@ -97,6 +98,8 @@ export default function App() {
         showExport={phase === 'dashboard' && !!results}
         dashboardRef={dashboardRef}
         score={results?.data?.neuralScore}
+        gpuUrl={gpuUrl}
+        setGpuUrl={setGpuUrl}
       />
 
       <AnimatePresence mode="wait">
@@ -155,6 +158,7 @@ export default function App() {
                   onTimeUpdate={handleTimeUpdate}
                   currentTime={currentTime}
                   analysisId={activeAnalysisId}
+                  getApiUrl={getApiUrl}
                 />
               </div>
               <Onboarding />
@@ -166,7 +170,7 @@ export default function App() {
   );
 }
 
-function Header({ onReset, fileName, canCompare, onCompare, showExport, dashboardRef, score }) {
+function Header({ onReset, fileName, canCompare, onCompare, showExport, dashboardRef, score, gpuUrl, setGpuUrl }) {
   return (
     <header className="flex items-center justify-between px-6 py-4 border-b border-border">
       <div className="flex items-center gap-2">
@@ -184,6 +188,7 @@ function Header({ onReset, fileName, canCompare, onCompare, showExport, dashboar
       )}
 
       <div className="flex items-center gap-3">
+        <GpuSettings gpuUrl={gpuUrl} setGpuUrl={setGpuUrl} />
         {canCompare && (
           <motion.button
             initial={{ opacity: 0, scale: 0.9 }}
@@ -233,7 +238,7 @@ function ErrorBanner({ message, onRetry }) {
   );
 }
 
-function Dashboard({ results, videoRef, onSeek, onTimeUpdate, currentTime, analysisId }) {
+function Dashboard({ results, videoRef, onSeek, onTimeUpdate, currentTime, analysisId, getApiUrl }) {
   const data = results?.data || {};
   const {
     neuralScore, percentile, metrics, timeline,
@@ -264,6 +269,7 @@ function Dashboard({ results, videoRef, onSeek, onTimeUpdate, currentTime, analy
             videoRef={videoRef}
             analysisId={analysisId}
             onTimeUpdate={onTimeUpdate}
+            getApiUrl={getApiUrl}
           />
         </div>
         <div className="lg:col-span-3">
@@ -297,8 +303,8 @@ function Dashboard({ results, videoRef, onSeek, onTimeUpdate, currentTime, analy
   );
 }
 
-function VideoPlayer({ videoRef, analysisId, onTimeUpdate }) {
-  const videoUrl = analysisId ? `/api/video/${analysisId}` : null;
+function VideoPlayer({ videoRef, analysisId, onTimeUpdate, getApiUrl }) {
+  const videoUrl = analysisId ? getApiUrl(`/api/video/${analysisId}`) : null;
 
   return (
     <motion.div

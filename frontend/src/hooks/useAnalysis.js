@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 const POLL_INTERVAL = 2000;
+const GPU_URL_KEY = 'neurolens_gpu_url';
 
 export function useAnalysis() {
   const [status, setStatus] = useState('idle');
@@ -8,7 +9,32 @@ export function useAnalysis() {
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState(0);
   const [analyses, setAnalyses] = useState([]);
+  const [gpuUrl, setGpuUrlState] = useState(() => {
+    try {
+      return localStorage.getItem(GPU_URL_KEY) || null;
+    } catch (err) {
+      return null;
+    }
+  });
   const pollingRef = useRef(null);
+
+  const setGpuUrl = useCallback((url) => {
+    setGpuUrlState(url);
+    try {
+      if (url) {
+        localStorage.setItem(GPU_URL_KEY, url);
+      } else {
+        localStorage.removeItem(GPU_URL_KEY);
+      }
+    } catch (err) {
+      // localStorage unavailable — state still works in-memory
+    }
+  }, []);
+
+  const getApiUrl = useCallback((path) => {
+    if (gpuUrl) return `${gpuUrl}${path}`;
+    return path;
+  }, [gpuUrl]);
 
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
@@ -19,16 +45,16 @@ export function useAnalysis() {
 
   const fetchAnalyses = useCallback(async () => {
     try {
-      const response = await fetch('/api/analyses');
+      const response = await fetch(getApiUrl('/api/analyses'));
       if (!response.ok) return;
       const data = await response.json();
       setAnalyses(data);
     } catch (err) {
       // Silent fail — history is non-critical
     }
-  }, []);
+  }, [getApiUrl]);
 
-  // Fetch analyses on mount
+  // Fetch analyses on mount and when gpuUrl changes
   useEffect(() => {
     fetchAnalyses();
   }, [fetchAnalyses]);
@@ -39,7 +65,7 @@ export function useAnalysis() {
       try {
         attempts++;
         setProgress(Math.min(95, attempts * 8));
-        const response = await fetch(`/api/results/${analysisId}`);
+        const response = await fetch(getApiUrl(`/api/results/${analysisId}`));
         if (!response.ok) throw new Error('Failed to fetch results');
 
         const data = await response.json();
@@ -60,7 +86,7 @@ export function useAnalysis() {
         setStatus('error');
       }
     }, POLL_INTERVAL);
-  }, [stopPolling, fetchAnalyses]);
+  }, [stopPolling, fetchAnalyses, getApiUrl]);
 
   const uploadVideo = useCallback(async (file) => {
     try {
@@ -71,7 +97,7 @@ export function useAnalysis() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(`/api/analyze`, {
+      const response = await fetch(getApiUrl('/api/analyze'), {
         method: 'POST',
         body: formData,
       });
@@ -98,11 +124,11 @@ export function useAnalysis() {
       setStatus('error');
       return null;
     }
-  }, [pollResults]);
+  }, [pollResults, getApiUrl]);
 
   const selectAnalysis = useCallback(async (analysisId) => {
     try {
-      const response = await fetch(`/api/results/${analysisId}`);
+      const response = await fetch(getApiUrl(`/api/results/${analysisId}`));
       if (!response.ok) throw new Error('Failed to load analysis');
       const data = await response.json();
       setResults(data);
@@ -111,7 +137,7 @@ export function useAnalysis() {
     } catch (err) {
       setError(err.message);
     }
-  }, []);
+  }, [getApiUrl]);
 
   const reset = useCallback(() => {
     stopPolling();
@@ -127,6 +153,9 @@ export function useAnalysis() {
     error,
     progress,
     analyses,
+    gpuUrl,
+    setGpuUrl,
+    getApiUrl,
     uploadVideo,
     selectAnalysis,
     fetchAnalyses,
