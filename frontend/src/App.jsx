@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw, GitCompare } from 'lucide-react';
 import { useAnalysis } from './hooks/useAnalysis';
 import Upload from './components/Upload';
 import ProcessingOverlay from './components/ProcessingOverlay';
@@ -14,6 +14,9 @@ import ScoreSummaryBar from './components/ScoreSummaryBar';
 import SensoryBreakdown from './components/SensoryBreakdown';
 import NarrativeArc from './components/NarrativeArc';
 import KeyMoments from './components/KeyMoments';
+import CompareView from './components/CompareView';
+import ExportButton from './components/ExportButton';
+import Onboarding from './components/Onboarding';
 
 export default function App() {
   const {
@@ -21,8 +24,11 @@ export default function App() {
     analyses, selectAnalysis,
   } = useAnalysis();
   const videoRef = useRef(null);
+  const dashboardRef = useRef(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [phase, setPhase] = useState('idle');
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareData, setCompareData] = useState({ a: null, b: null });
 
   const handleSeek = useCallback((timestamp) => {
     if (videoRef.current) {
@@ -63,6 +69,21 @@ export default function App() {
     setPhase('dashboard');
   }, [selectAnalysis]);
 
+  const handleCompare = useCallback(async () => {
+    if (analyses.length < 2) return;
+    try {
+      const [first, second] = analyses.slice(0, 2);
+      const [resA, resB] = await Promise.all([
+        fetch(`/api/results/${first.analysisId}`).then((r) => r.json()),
+        fetch(`/api/results/${second.analysisId}`).then((r) => r.json()),
+      ]);
+      setCompareData({ a: resA, b: resB });
+      setCompareMode(true);
+    } catch (err) {
+      console.error('Compare fetch failed:', err);
+    }
+  }, [analyses]);
+
   const activeAnalysisId = results?.analysisId || null;
   const fileName = results?.fileName || null;
 
@@ -71,6 +92,11 @@ export default function App() {
       <Header
         onReset={phase === 'dashboard' ? handleReset : null}
         fileName={phase === 'dashboard' ? fileName : null}
+        canCompare={phase === 'dashboard' && analyses.length >= 2}
+        onCompare={handleCompare}
+        showExport={phase === 'dashboard' && !!results}
+        dashboardRef={dashboardRef}
+        score={results?.data?.neuralScore}
       />
 
       <AnimatePresence mode="wait">
@@ -91,6 +117,17 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {compareMode && compareData.a && compareData.b && (
+          <CompareView
+            key="compare"
+            analysisA={compareData.a}
+            analysisB={compareData.b}
+            onClose={() => setCompareMode(false)}
+          />
+        )}
+      </AnimatePresence>
+
       <main className="max-w-[1440px] mx-auto px-5 pb-12">
         <AnimatePresence mode="wait">
           {error && <ErrorBanner key="error" message={error} onRetry={handleReset} />}
@@ -102,7 +139,7 @@ export default function App() {
               key="dashboard-wrapper"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="mt-4"
+              className="mt-4 relative"
             >
               <AnalysisHistory
                 analyses={analyses}
@@ -110,14 +147,17 @@ export default function App() {
                 onSelect={handleSelectAnalysis}
                 onNewAnalysis={handleReset}
               />
-              <Dashboard
-                results={results}
-                videoRef={videoRef}
-                onSeek={handleSeek}
-                onTimeUpdate={handleTimeUpdate}
-                currentTime={currentTime}
-                analysisId={activeAnalysisId}
-              />
+              <div ref={dashboardRef}>
+                <Dashboard
+                  results={results}
+                  videoRef={videoRef}
+                  onSeek={handleSeek}
+                  onTimeUpdate={handleTimeUpdate}
+                  currentTime={currentTime}
+                  analysisId={activeAnalysisId}
+                />
+              </div>
+              <Onboarding />
             </motion.div>
           )}
         </AnimatePresence>
@@ -126,7 +166,7 @@ export default function App() {
   );
 }
 
-function Header({ onReset, fileName }) {
+function Header({ onReset, fileName, canCompare, onCompare, showExport, dashboardRef, score }) {
   return (
     <header className="flex items-center justify-between px-6 py-4 border-b border-border">
       <div className="flex items-center gap-2">
@@ -144,6 +184,20 @@ function Header({ onReset, fileName }) {
       )}
 
       <div className="flex items-center gap-3">
+        {canCompare && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            onClick={onCompare}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-text-dim text-xs font-mono hover:border-border-active hover:text-text-main transition-all"
+          >
+            <GitCompare size={13} />
+            Compare
+          </motion.button>
+        )}
+        {showExport && (
+          <ExportButton targetRef={dashboardRef} score={score} />
+        )}
         {onReset && (
           <motion.button
             initial={{ opacity: 0, scale: 0.9 }}
