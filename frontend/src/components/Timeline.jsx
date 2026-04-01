@@ -205,7 +205,7 @@ export default function Timeline({ data, currentTime = 0, onSeek }) {
 
       {/* Chart */}
       <div style={{ height: 240 }}>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
             <defs>
               {ALL_METRICS.map((key) => (

@@ -25,7 +25,7 @@ export default function NarrativeArc({ narrativeArc }) {
         Narrative Arc
       </h3>
 
-      <ResponsiveContainer width="100%" height={140}>
+      <ResponsiveContainer width="100%" height={140} minWidth={0}>
         <AreaChart data={chartData} margin={{ top: 10, right: 10, bottom: 0, left: 10 }}>
           <defs>
             <linearGradient id="narrativeGradient" x1="0" y1="0" x2="0" y2="1">
