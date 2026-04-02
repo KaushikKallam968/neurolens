@@ -37,18 +37,17 @@ class Predictor(BasePredictor):
         """Load TribeV2 model into GPU memory. Called once when container starts."""
         logger.info("Loading TribeV2 model...")
 
-        # Import tribev2 (installed via pip in cog.yaml)
-        from tribev2.model import TribeV2Model
-        from tribev2.data import get_events_dataframe
+        from tribev2.demo_utils import TribeModel
 
-        self.get_events_dataframe = get_events_dataframe
-
-        # Load model
-        self.model = TribeV2Model.from_pretrained()
-        self.model.eval()
+        # Load model from HuggingFace Hub
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model = TribeModel.from_pretrained(
+            "facebook/tribev2",
+            device=device,
+            cache_folder="/tmp/tribev2_cache",
+        )
 
         if torch.cuda.is_available():
-            self.model = self.model.cuda()
             logger.info(f"Model loaded on GPU: {torch.cuda.get_device_name(0)}")
         else:
             logger.warning("No GPU detected — inference will be slow")
@@ -79,17 +78,13 @@ class Predictor(BasePredictor):
 
         # Stage 1: Extract events (audio, transcript, visual features)
         logger.info("Stage: extracting_events")
-        events = self.get_events_dataframe(video_path)
+        events = self.model.get_events_dataframe(video_path=video_path)
         logger.info(f"Events extracted: {len(events)} rows")
 
         # Stage 2: Predict cortical activity
         logger.info("Stage: predicting")
         with torch.no_grad():
-            if torch.cuda.is_available():
-                with torch.cuda.amp.autocast(dtype=torch.float16):
-                    predictions = self.model.predict(events)
-            else:
-                predictions = self.model.predict(events)
+            predictions, segments = self.model.predict(events)
 
         # predictions shape: (n_timesteps, 20484) — fsaverage5 cortical mesh
         if isinstance(predictions, torch.Tensor):
@@ -99,7 +94,6 @@ class Predictor(BasePredictor):
 
         # Stage 3: Compute marketing metrics
         logger.info("Stage: computing_metrics")
-        segments = events.get("segments", None) if hasattr(events, "get") else None
         result = compute_metrics(predictions, segments)
 
         # Stage 4: Apply content type preset weights
