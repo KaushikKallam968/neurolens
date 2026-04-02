@@ -29,7 +29,7 @@ TUNNEL_PID=$!
 sleep 8
 
 # Extract tunnel URL
-TUNNEL_URL=$(grep -oP 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/neurolens-tunnel.log | head -1)
+TUNNEL_URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/neurolens-tunnel.log | head -1)
 
 if [ -n "$TUNNEL_URL" ]; then
   # Register GPU URL in Supabase (primary discovery)

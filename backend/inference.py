@@ -10,6 +10,7 @@ import os
 import sys
 import logging
 import pathlib
+import torch
 
 from .metrics import compute_metrics
 from .mock_inference import generate_mock_results
@@ -18,7 +19,22 @@ from .mock_inference import generate_mock_results
 if sys.platform == "win32":
     pathlib.PosixPath = pathlib.WindowsPath
 
+# Patch torch.load for PyTorch 2.6+ compatibility with pyannote/whisperx
+# Must be done before any library imports torch.load
+_original_torch_load = torch.load
+
+def _patched_torch_load(*args, **kwargs):
+    if 'weights_only' not in kwargs:
+        kwargs['weights_only'] = False
+    return _original_torch_load(*args, **kwargs)
+
+torch.load = _patched_torch_load
+
 logger = logging.getLogger(__name__)
+
+# Use very short cache path on Windows to avoid 260-char path limit
+# (neuralset/exca creates deeply nested subdirectory names)
+CACHE_DIR = os.path.join("C:\\", "nlc") if sys.platform == "win32" else os.path.join(os.path.dirname(__file__), "cache")
 
 
 def _tribev2_available():
@@ -57,13 +73,22 @@ class TribeInference:
             from tribev2 import TribeModel
 
             logger.info("Loading TribeV2 model (this may download ~10GB on first run)...")
-            cache_dir = os.path.join(os.path.dirname(__file__), "cache")
-            os.makedirs(cache_dir, exist_ok=True)
-            # Use posix-style separator for HuggingFace repo ID
+            os.makedirs(CACHE_DIR, exist_ok=True)
+
+            # Set environment variable so neuralset/exca also use short path
+            os.environ["EXCA_CACHE_DIR"] = CACHE_DIR
+
             self.model = TribeModel.from_pretrained(
                 "facebook" + "/" + "tribev2",
-                cache_folder=cache_dir,
+                cache_folder=CACHE_DIR,
             )
+
+            # Force num_workers=0 on Windows to prevent DataLoader
+            # multiprocessing deadlocks (19+ zombie worker processes)
+            if sys.platform == "win32":
+                self.model.data.num_workers = 0
+                logger.info("Set num_workers=0 for Windows compatibility")
+
             logger.info("TribeV2 model loaded successfully")
         except Exception as e:
             logger.error(f"Failed to load TribeV2 model: {e}")
@@ -99,8 +124,30 @@ class TribeInference:
         try:
             logger.info(f"Running TribeV2 inference on: {video_path}")
 
-            # Extract video events
-            df = self.model.get_events_dataframe(video_path=video_path)
+            # Extract video events — whisperx may fail on some videos
+            # (empty audio, codec issues, etc.) so we handle that gracefully
+            try:
+                df = self.model.get_events_dataframe(video_path=video_path)
+            except Exception as e:
+                logger.warning(f"Event extraction failed, trying audio-only mode: {e}")
+                # Retry with audio_only=True to skip whisperx transcription
+                try:
+                    from tribev2.demo_utils import get_audio_and_text_events
+                    import pandas as pd
+                    event = {
+                        "type": "Video",
+                        "filepath": str(video_path),
+                        "start": 0,
+                        "timeline": "default",
+                        "subject": "default",
+                    }
+                    df = get_audio_and_text_events(
+                        pd.DataFrame([event]), audio_only=True
+                    )
+                except Exception as e2:
+                    raise RuntimeError(
+                        f"Event extraction failed even in audio-only mode: {e2}"
+                    ) from e2
 
             if df is None or len(df) == 0:
                 raise RuntimeError("TribeV2 produced no events from video")

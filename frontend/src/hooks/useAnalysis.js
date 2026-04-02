@@ -137,7 +137,7 @@ export function useAnalysis() {
           fetchAnalyses();
         } else if (data.status === 'error') {
           stopPolling();
-          setError(data.message || 'Analysis failed');
+          setError(data.error || data.message || 'Analysis failed');
           setStatus('error');
         }
       } catch (err) {
