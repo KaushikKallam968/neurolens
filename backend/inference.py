@@ -37,6 +37,30 @@ logger = logging.getLogger(__name__)
 CACHE_DIR = os.path.join("C:\\", "nlc") if sys.platform == "win32" else os.path.join(os.path.dirname(__file__), "cache")
 
 
+def _kill_orphan_workers():
+    """Kill child Python processes spawned by DataLoader on Windows."""
+    try:
+        import subprocess
+        my_pid = str(os.getpid())
+        # Find child python processes of current PID
+        result = subprocess.run(
+            ['wmic', 'process', 'where',
+             f"ParentProcessId={my_pid} and Name='python.exe'",
+             'get', 'ProcessId'],
+            capture_output=True, text=True, timeout=10,
+        )
+        for line in result.stdout.strip().split('\n')[1:]:
+            pid = line.strip()
+            if pid and pid.isdigit():
+                try:
+                    os.kill(int(pid), 9)
+                    logger.info(f"Killed orphan worker PID {pid}")
+                except OSError:
+                    pass
+    except Exception as e:
+        logger.warning(f"Worker cleanup failed (non-critical): {e}")
+
+
 def _tribev2_available():
     """Check if TribeV2 is installed and importable."""
     try:
@@ -83,11 +107,24 @@ class TribeInference:
                 cache_folder=CACHE_DIR,
             )
 
-            # Force num_workers=0 on Windows to prevent DataLoader
-            # multiprocessing deadlocks (19+ zombie worker processes)
+            # Windows DataLoader tuning:
+            # - num_workers=1 allows prefetching without the deadlock
+            #   that num_workers>1 causes (19+ zombie processes)
+            # - batch_size=16 reduces VRAM pressure (default 64 fills 16GB)
+            #   and gives faster per-batch turnaround
             if sys.platform == "win32":
-                self.model.data.num_workers = 0
-                logger.info("Set num_workers=0 for Windows compatibility")
+                self.model.data.num_workers = 1
+                self.model.data.batch_size = 16
+                logger.info("Windows tuning: num_workers=1, batch_size=16")
+
+            # Wrap the model's forward pass in float16 autocast
+            if self.model._model is not None:
+                original_forward = self.model._model.forward
+                def autocast_forward(*args, **kwargs):
+                    with torch.amp.autocast('cuda', dtype=torch.float16):
+                        return original_forward(*args, **kwargs)
+                self.model._model.forward = autocast_forward
+                logger.info("Float16 autocast enabled on model forward pass")
 
             logger.info("TribeV2 model loaded successfully")
         except Exception as e:
@@ -175,6 +212,13 @@ class TribeInference:
                 f"Inference complete: {preds.shape[0]} timesteps, "
                 f"{preds.shape[1]} vertices"
             )
+
+            # Clean up GPU memory and orphaned DataLoader workers
+            import gc
+            gc.collect()
+            torch.cuda.empty_cache()
+            if sys.platform == "win32":
+                _kill_orphan_workers()
 
             # Stage 4: Compute metrics (fast — sub-second)
             _report("computing_metrics")

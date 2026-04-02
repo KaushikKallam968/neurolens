@@ -18,13 +18,15 @@ trap 'curl -s -X PATCH "$SUPABASE_URL/rest/v1/gpu_status?id=eq.default" \
   echo "{\"gpuUrl\":null,\"updatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"status\":\"offline\"}" | gh gist edit "$GIST_ID" -f gpu-url.json - 2>/dev/null ; \
   echo "GPU marked offline"' EXIT
 
-echo "Starting NeuroLens GPU backend..."
-NEUROLENS_MOCK=false python -m uvicorn backend.main:app --host 0.0.0.0 --port 8001 &
+PORT=${NEUROLENS_PORT:-8001}
+
+echo "Starting NeuroLens GPU backend on port $PORT..."
+NEUROLENS_MOCK=false python -m uvicorn backend.main:app --host 0.0.0.0 --port "$PORT" &
 BACKEND_PID=$!
 sleep 3
 
 echo "Starting Cloudflare tunnel..."
-./cloudflared.exe tunnel --url http://localhost:8001 2>&1 | tee /tmp/neurolens-tunnel.log &
+./cloudflared.exe tunnel --url "http://localhost:$PORT" 2>&1 | tee /tmp/neurolens-tunnel.log &
 TUNNEL_PID=$!
 sleep 8
 
