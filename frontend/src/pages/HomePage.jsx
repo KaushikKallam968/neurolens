@@ -1,11 +1,12 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, TrendingUp, Film, Award, Zap } from 'lucide-react';
+import { Plus, TrendingUp, Film, Award, Zap, Play } from 'lucide-react';
 import { useAnalysisContext } from '../contexts/AnalysisContext';
 import Upload from '../components/Upload';
 import { Button, Card, Modal, Input } from '../components/ui';
 import { getScoreColor } from '../lib/colors';
+import { DEMO_ANALYSIS, DEMO_STORAGE_KEY } from '../lib/demoData';
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -48,8 +49,52 @@ export default function HomePage() {
     setCampaignName('');
   }, [campaignName]);
 
+  // Check if first visit — show demo prompt
+  const [showDemoBanner, setShowDemoBanner] = useState(false);
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem(DEMO_STORAGE_KEY) && analyses.length === 0) {
+        setShowDemoBanner(true);
+      }
+    } catch {}
+  }, [analyses.length]);
+
+  const handleTryDemo = useCallback(() => {
+    localStorage.setItem(DEMO_STORAGE_KEY, 'true');
+    setShowDemoBanner(false);
+    // Set demo analysis into context and navigate
+    selectAnalysis('demo-analysis');
+    navigate('/analysis/demo-analysis');
+  }, [selectAnalysis, navigate]);
+
+  const dismissDemo = useCallback(() => {
+    localStorage.setItem(DEMO_STORAGE_KEY, 'true');
+    setShowDemoBanner(false);
+  }, []);
+
   return (
     <div className="mt-8">
+      {/* Demo banner for first-time visitors */}
+      {showDemoBanner && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6 p-5 rounded-[var(--radius-lg)] border border-primary/20 bg-primary-dim flex items-center justify-between"
+        >
+          <div>
+            <h3 className="font-display text-base font-semibold text-text-bright">See what NeuroLens can do</h3>
+            <p className="text-sm text-text-dim mt-1">Explore a pre-analyzed demo before uploading your own content.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={dismissDemo}>Skip</Button>
+            <Button variant="primary" size="sm" onClick={handleTryDemo}>
+              <Play size={14} />
+              Try Demo
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
       {/* Global stats */}
       {stats && (
         <motion.div

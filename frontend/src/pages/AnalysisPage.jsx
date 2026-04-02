@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Eye, EyeOff, Flame, Share2 } from 'lucide-react';
 import { useAnalysisContext } from '../contexts/AnalysisContext';
 import { useVideoSync } from '../hooks/useVideoSync';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import InlineProgress from '../components/InlineProgress';
 import NeuralScore from '../components/NeuralScore';
 import MetricsPanel from '../components/MetricsPanel';
@@ -36,6 +37,13 @@ export default function AnalysisPage() {
   const [heatmapMode, setHeatmapMode] = useState('off'); // off | heatmap | fog
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [showShare, setShowShare] = useState(false);
+
+  // Keyboard shortcuts for video playback
+  useKeyboardShortcuts({
+    videoRef,
+    keyMoments: results?.data?.keyMoments,
+    onSeek: seekAndPlay,
+  });
 
   // Load analysis by ID if navigated directly
   useEffect(() => {

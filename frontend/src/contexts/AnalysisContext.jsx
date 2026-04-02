@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback, useRef } from 'react'
 import { useProcessingStatus } from '../hooks/useProcessingStatus';
 import { useCampaigns } from '../hooks/useCampaigns';
 import { uploadVideo as sbUploadVideo } from '../lib/supabase';
+import { DEMO_ANALYSIS } from '../lib/demoData';
 
 const AnalysisContext = createContext(null);
 
@@ -59,6 +60,12 @@ export function AnalysisProvider({ children }) {
   }, [getApiUrl, processing, campaigns]);
 
   const selectAnalysis = useCallback(async (analysisId) => {
+    // Handle demo analysis without API call
+    if (analysisId === 'demo-analysis') {
+      setResults(DEMO_ANALYSIS);
+      processing.completeInstant();
+      return;
+    }
     try {
       const data = await campaigns.loadAnalysis(analysisId);
       setResults(data);
