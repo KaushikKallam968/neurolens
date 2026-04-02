@@ -3,9 +3,8 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { RotateCcw, GitCompare } from 'lucide-react';
 import { AnalysisProvider, useAnalysisContext } from './contexts/AnalysisContext';
-import GpuSettings from './components/GpuSettings';
 import CompareView from './components/CompareView';
-import ExportButton from './components/ExportButton';
+import DemoModeBadge from './components/DemoModeBadge';
 
 export default function App() {
   return (
@@ -82,6 +81,7 @@ function Header({ onReset, fileName, canCompare, onCompare, showExport, score })
           <span className="text-text-bright">Neuro</span>
           <span className="text-primary">Lens</span>
         </a>
+        <DemoModeBadge />
       </div>
 
       {fileName && (

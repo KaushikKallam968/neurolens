@@ -1,0 +1,20 @@
+build:
+  gpu: true
+  cuda: "12.4"
+  python_version: "3.11"
+  system_packages:
+    - ffmpeg
+    - libsndfile1
+  python_packages:
+    - numpy>=1.24
+    - torch>=2.4
+    - torchaudio>=2.4
+    - torchvision>=0.19
+    - scipy
+    - pandas
+    - ffmpeg-python
+
+  run:
+    - pip install tribev2
+
+predict: "predict.py:Predictor"

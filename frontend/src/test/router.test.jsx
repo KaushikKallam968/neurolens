@@ -48,6 +48,8 @@ vi.mock('../lib/supabase', () => ({
   getAnalysis: vi.fn(() => Promise.resolve(null)),
   uploadVideo: vi.fn(),
   getVideoUrl: vi.fn(),
+  DEMO_MODE: false,
+  USE_EDGE: false,
 }));
 
 import App from '../App';

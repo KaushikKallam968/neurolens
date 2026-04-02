@@ -1,9 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = 'https://hxevptffvdhslexjykgy.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4ZXZwdGZmdmRoc2xleGp5a2d5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzk0MTQsImV4cCI6MjA5MDY1NTQxNH0.463as0C1qodVIiejfsmdXdTD9koqkUPcTTOw0fSJ0kU';
+// Use environment variables with fallback to hardcoded values for backward compat
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://hxevptffvdhslexjykgy.supabase.co';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4ZXZwdGZmdmRoc2xleGp5a2d5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzk0MTQsImV4cCI6MjA5MDY1NTQxNH0.463as0C1qodVIiejfsmdXdTD9koqkUPcTTOw0fSJ0kU';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Feature flag: use new Edge Functions or legacy API
+export const USE_EDGE = import.meta.env.VITE_USE_EDGE === 'true';
+
+// Demo mode flag
+export const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
 
 export async function getGpuUrl() {
   const { data } = await supabase
