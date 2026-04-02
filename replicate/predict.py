@@ -21,8 +21,8 @@ import numpy as np
 # Cog predictor framework
 from cog import BasePredictor, Input, Path
 
-# Add local tribev2 to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "tribev2"))
+# Add parent dir to path so 'from tribev2.model import ...' works
+sys.path.insert(0, os.path.dirname(__file__))
 
 from metrics import compute_metrics
 from content_presets import apply_preset

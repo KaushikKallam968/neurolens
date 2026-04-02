@@ -43,7 +43,7 @@ export default function ScoreSummaryBar({ neuralScore, percentile, cognitiveLoad
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="flex flex-wrap items-center gap-6 bg-depth-1 border border-border rounded-lg px-5 py-3"
+      className="flex flex-wrap items-center gap-6 bg-depth-1/20 backdrop-blur-xl border border-white/[0.06] rounded-[16px] px-5 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.05)]"
     >
       {/* Neural Score */}
       <div className="flex items-baseline gap-1">

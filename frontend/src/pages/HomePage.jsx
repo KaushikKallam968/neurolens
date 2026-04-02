@@ -79,7 +79,7 @@ export default function HomePage() {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-6 p-5 rounded-[var(--radius-lg)] border border-primary/20 bg-primary-dim flex items-center justify-between"
+          className="mb-6 p-5 rounded-[20px] border border-primary/10 bg-primary/[0.06] backdrop-blur-xl flex items-center justify-between shadow-[0_8px_32px_rgba(108,159,255,0.06),inset_0_1px_0_rgba(255,255,255,0.05)]"
         >
           <div>
             <h3 className="font-display text-base font-semibold text-text-bright">See what NeuroLens can do</h3>

@@ -11,7 +11,8 @@ const Card = forwardRef(function Card({
     <div
       ref={ref}
       className={`
-        rounded-[var(--radius-lg)] border border-border bg-depth-1/50
+        rounded-[20px] border border-white/[0.06] bg-depth-1/25 backdrop-blur-xl
+        shadow-[0_8px_32px_rgba(0,0,0,0.25),inset_0_1px_0_rgba(255,255,255,0.06)]
         ${padding ? 'p-5' : ''}
         ${glow ? 'glow-primary' : ''}
         ${className}

@@ -250,7 +250,7 @@ function VideoPlayer({ videoRef, analysisId, getApiUrl }) {
     <motion.div
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="rounded-xl border border-border bg-depth-1/50 overflow-hidden flex items-center justify-center min-h-[320px] relative"
+      className="rounded-[20px] border border-white/[0.06] bg-depth-1/20 backdrop-blur-xl overflow-hidden flex items-center justify-center min-h-[320px] relative shadow-[0_12px_48px_rgba(0,0,0,0.25)]"
     >
       {videoUrl ? (
         <video

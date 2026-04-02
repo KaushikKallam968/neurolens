@@ -1,10 +1,10 @@
 import { forwardRef } from 'react';
 
 const variants = {
-  primary: 'bg-primary text-void hover:bg-primary/90 glow-primary',
-  secondary: 'bg-depth-2 text-text-main border border-border hover:border-border-active hover:text-text-bright',
-  ghost: 'text-text-dim hover:text-text-main hover:bg-depth-2/50',
-  danger: 'bg-score-low/10 text-score-low border border-score-low/20 hover:bg-score-low/20',
+  primary: 'bg-primary text-void hover:bg-primary/90 shadow-[0_8px_24px_rgba(108,159,255,0.25)] hover:shadow-[0_8px_32px_rgba(108,159,255,0.35)]',
+  secondary: 'bg-depth-2/30 backdrop-blur-lg text-text-main border border-white/[0.06] hover:border-white/[0.12] hover:text-text-bright hover:bg-depth-2/40',
+  ghost: 'text-text-dim hover:text-text-main hover:bg-depth-2/20 hover:backdrop-blur-sm',
+  danger: 'bg-score-low/10 backdrop-blur-lg text-score-low border border-score-low/20 hover:bg-score-low/20',
 };
 
 const sizes = {

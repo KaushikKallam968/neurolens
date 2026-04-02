@@ -66,7 +66,7 @@ function MetricCard({ metricKey, value, timeline, index }) {
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05, duration: 0.4 }}
-      className="bg-depth-1 border border-border rounded-lg p-4 group hover:border-border-active transition-all duration-300 cursor-default"
+      className="bg-depth-1/20 backdrop-blur-xl border border-white/[0.06] rounded-[16px] p-4 group hover:border-white/[0.12] transition-all duration-300 cursor-default shadow-[0_4px_24px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)]"
       style={{
         '--card-glow': hexToRgba(color, 0.06),
       }}

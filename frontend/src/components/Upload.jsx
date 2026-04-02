@@ -157,9 +157,9 @@ export default function Upload({ onUpload }) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
             onClick={() => onUpload(file)}
-            className="mt-8 px-10 py-3 rounded-full font-display font-semibold text-base text-void bg-primary tracking-wide hover:glow-primary active:scale-[0.98] transition-all duration-200"
-            style={{ boxShadow: '0 0 20px rgba(108, 159, 255, 0.15)' }}
-            whileHover={{ boxShadow: '0 0 30px rgba(108, 159, 255, 0.3)' }}
+            className="mt-8 px-10 py-3 rounded-full font-display font-semibold text-base text-void bg-primary tracking-wide active:scale-[0.98] transition-all duration-300"
+            style={{ boxShadow: '0 0 30px rgba(108, 159, 255, 0.25), 0 8px 24px rgba(108, 159, 255, 0.2)' }}
+            whileHover={{ boxShadow: '0 0 50px rgba(108, 159, 255, 0.4), 0 12px 40px rgba(108, 159, 255, 0.3)' }}
           >
             Scan
           </motion.button>

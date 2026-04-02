@@ -74,7 +74,7 @@ function AppShell() {
 
 function Header({ onReset, fileName, canCompare, onCompare, showExport, score }) {
   return (
-    <header className="flex items-center justify-between px-6 py-4 border-b border-border">
+    <header className="flex items-center justify-between px-6 py-4 border-b border-white/[0.04] bg-void/60 backdrop-blur-xl sticky top-0 z-50">
       <div className="flex items-center gap-2">
         <div className="w-2 h-2 rounded-full bg-primary animate-[pulse-ring_3s_ease-in-out_infinite]" style={{ boxShadow: '0 0 8px rgba(108, 159, 255, 0.5)' }} />
         <a href="/" className="font-display text-lg font-bold" style={{ letterSpacing: '-0.03em' }}>
