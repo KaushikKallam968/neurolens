@@ -8,12 +8,12 @@ Endpoints:
 """
 
 import os
+import sys
 import uuid
 import time
 import logging
-import asyncio
+import subprocess
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -54,11 +54,8 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 # SQLite database (replaces in-memory results_store)
 
-# Inference engine (singleton)
+# Inference engine — only used for health checks (model not loaded in server process)
 engine = TribeInference()
-
-# Thread pool for running analysis without blocking the event loop
-executor = ThreadPoolExecutor(max_workers=2)
 
 # ---------------------------------------------------------------------------
 # Startup
@@ -68,8 +65,9 @@ executor = ThreadPoolExecutor(max_workers=2)
 async def startup():
     logger.info("Starting NeuroLens API...")
     init_db()
-    engine.load_model()
-    logger.info(f"Inference engine status: {engine.status}")
+    # Don't load model in server process — worker processes load their own
+    # This keeps the server lightweight and avoids CUDA zombie issues
+    logger.info("Server ready (workers load model on demand)")
 
 
 # ---------------------------------------------------------------------------
@@ -121,48 +119,27 @@ async def analyze_video(file: UploadFile = File(...)):
         created_at=time.time(),
     )
 
-    # Run analysis in background thread
-    loop = asyncio.get_event_loop()
-    loop.run_in_executor(executor, _run_analysis, analysis_id, str(file_path))
+    # Spawn analysis in a separate process — clean lifecycle, no CUDA zombies
+    worker_cmd = [
+        sys.executable, "-m", "backend.worker",
+        analysis_id, str(file_path),
+    ]
+    # Run from the project root so module imports work
+    project_root = str(Path(__file__).parent.parent)
+    env = {**os.environ, "NEUROLENS_MOCK": os.getenv("NEUROLENS_MOCK", "false")}
+    subprocess.Popen(
+        worker_cmd,
+        cwd=project_root,
+        env=env,
+        # Detach from server process so it doesn't block shutdown
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0,
+    )
+    logger.info(f"Spawned worker process for {analysis_id}")
 
     return {
         "analysisId": analysis_id,
         "status": "processing",
     }
-
-
-def _run_analysis(analysis_id, video_path):
-    """Run inference in a background thread with progressive stage updates."""
-    def on_stage(stage, partial_data=None):
-        """Callback to persist intermediate progress."""
-        save_analysis(
-            analysis_id=analysis_id,
-            status="processing",
-            stage=stage,
-            data=partial_data,
-        )
-        logger.info(f"Analysis {analysis_id}: stage={stage}")
-
-    try:
-        logger.info(f"Starting analysis: {analysis_id}")
-        result = engine.analyze(video_path, on_stage=on_stage)
-
-        save_analysis(
-            analysis_id=analysis_id,
-            status="complete",
-            stage="complete",
-            data=result,
-            completed_at=time.time(),
-        )
-        logger.info(f"Analysis complete: {analysis_id}")
-
-    except Exception as e:
-        logger.error(f"Analysis failed for {analysis_id}: {e}")
-        save_analysis(
-            analysis_id=analysis_id,
-            status="error",
-            error=str(e),
-        )
 
 
 @app.get("/api/results/{analysis_id}")
@@ -236,9 +213,9 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "ok",
-        "engine": engine.status,
+        "engine": "worker-pool",
         "mock": engine.is_mock,
-        "version": "0.1.0",
+        "version": "0.2.0",
     }
 
 
