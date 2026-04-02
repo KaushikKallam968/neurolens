@@ -1,0 +1,4 @@
+__pycache__/
+.cog/
+push.sh
+*.pyc

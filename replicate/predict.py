@@ -21,13 +21,11 @@ import numpy as np
 # Cog predictor framework
 from cog import BasePredictor, Input, Path
 
+# Add local tribev2 to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "tribev2"))
+
 from metrics import compute_metrics
 from content_presets import apply_preset
-
-# Fix for loading Linux-created checkpoints on Windows (shouldn't be needed
-# on Replicate Linux containers, but kept for safety)
-if sys.platform == "win32":
-    pathlib.PosixPath = pathlib.WindowsPath
 
 logger = logging.getLogger(__name__)
 
