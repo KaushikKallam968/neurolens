@@ -4,7 +4,7 @@ const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN;
 const MODEL_VERSION = process.env.REPLICATE_MODEL_VERSION;
 
 export const config = {
-  api: { bodyParser: { sizeLimit: '50mb' } },
+  api: { bodyParser: false },
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -20,21 +20,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const filename = extractFilename(req) || 'uploaded-video.mp4';
-
-    // Convert uploaded file to base64 data URI for Replicate
-    const bodyBuffer = await getRawBody(req);
-    const boundary = getBoundary(req.headers['content-type'] || '');
-    const fileBuffer = boundary ? extractFileFromMultipart(bodyBuffer, boundary) : bodyBuffer;
+    // Read raw body (bodyParser disabled for multipart)
+    const rawBody = await getRawBody(req);
+    const contentType = req.headers['content-type'] || '';
+    const boundary = getBoundary(contentType);
+    const { fileBuffer, filename: parsedFilename } = boundary
+      ? extractFileFromMultipart(rawBody, boundary)
+      : { fileBuffer: rawBody, filename: null };
+    const filename = parsedFilename || 'uploaded-video.mp4';
 
     if (!fileBuffer || fileBuffer.length === 0) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const base64 = fileBuffer.toString('base64');
-    const dataUri = `data:video/mp4;base64,${base64}`;
+    // Upload to Replicate's file API (avoids base64 bloat)
+    const formData = new FormData();
+    formData.append('content', new Blob([fileBuffer], { type: 'video/mp4' }), filename);
 
-    // Create Replicate prediction and return immediately
+    const uploadRes = await fetch('https://api.replicate.com/v1/files', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${REPLICATE_API_TOKEN}` },
+      body: formData,
+    });
+
+    if (!uploadRes.ok) {
+      const errText = await uploadRes.text();
+      throw new Error(`File upload error (${uploadRes.status}): ${errText}`);
+    }
+
+    const uploadData = await uploadRes.json();
+    const fileUrl = uploadData.urls.get;
+
+    // Create Replicate prediction with the file URL
     const predictionRes = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
@@ -44,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: JSON.stringify({
         version: MODEL_VERSION,
         input: {
-          video: dataUri,
+          video: fileUrl,
           content_type: 'custom',
           extract_thumbnails: false,
         },
@@ -86,35 +103,53 @@ function getBoundary(contentType: string): string | null {
   return match ? (match[1] || match[2]) : null;
 }
 
-function extractFileFromMultipart(body: Buffer, boundary: string): Buffer | null {
-  const str = body.toString('binary');
-  const parts = str.split(`--${boundary}`);
-  for (const part of parts) {
-    if (part.includes('Content-Disposition') && part.includes('filename=')) {
-      const headerEnd = part.indexOf('\r\n\r\n');
-      if (headerEnd === -1) continue;
-      const content = part.substring(headerEnd + 4);
-      const trimmed = content.endsWith('\r\n') ? content.slice(0, -2) : content;
-      return Buffer.from(trimmed, 'binary');
-    }
-  }
-  return null;
-}
+function extractFileFromMultipart(body: Buffer, boundary: string): { fileBuffer: Buffer | null; filename: string | null } {
+  const boundaryBuf = Buffer.from(`--${boundary}`);
+  const headerSep = Buffer.from('\r\n\r\n');
+  const crlf = Buffer.from('\r\n');
 
-function extractFilename(req: VercelRequest): string | null {
-  const contentType = req.headers['content-type'] || '';
-  if (contentType.includes('multipart')) {
-    const body = typeof req.body === 'string' ? req.body : '';
-    const match = body.match(/filename="([^"]+)"/);
-    if (match) return match[1];
+  let pos = 0;
+  let filename: string | null = null;
+
+  while (pos < body.length) {
+    const boundaryStart = body.indexOf(boundaryBuf, pos);
+    if (boundaryStart === -1) break;
+
+    const nextBoundary = body.indexOf(boundaryBuf, boundaryStart + boundaryBuf.length);
+    if (nextBoundary === -1) break;
+
+    const partStart = boundaryStart + boundaryBuf.length;
+    const headerEnd = body.indexOf(headerSep, partStart);
+    if (headerEnd === -1) { pos = nextBoundary; continue; }
+
+    const headers = body.subarray(partStart, headerEnd).toString('utf-8');
+    if (!headers.includes('filename=')) { pos = nextBoundary; continue; }
+
+    const fnMatch = headers.match(/filename="([^"]+)"/);
+    if (fnMatch) filename = fnMatch[1];
+
+    const contentStart = headerEnd + headerSep.length;
+    let contentEnd = nextBoundary;
+    // Remove trailing \r\n before boundary
+    if (contentEnd >= 2 && body[contentEnd - 1] === crlf[1] && body[contentEnd - 2] === crlf[0]) {
+      contentEnd -= 2;
+    }
+
+    return { fileBuffer: body.subarray(contentStart, contentEnd), filename };
   }
-  return null;
+
+  return { fileBuffer: null, filename: null };
 }
 
 // Mock handler when Replicate isn't configured
-function handleMock(req: VercelRequest, res: VercelResponse) {
+async function handleMock(req: VercelRequest, res: VercelResponse) {
   const analysisId = crypto.randomUUID();
-  const filename = extractFilename(req) || 'uploaded-video.mp4';
+  const rawBody = await getRawBody(req);
+  const boundary = getBoundary(req.headers['content-type'] || '');
+  const { filename: parsedFilename } = boundary
+    ? extractFileFromMultipart(rawBody, boundary)
+    : { filename: null };
+  const filename = parsedFilename || 'uploaded-video.mp4';
   const seed = hashCode(filename + analysisId);
   const results = generateMockAnalysis(seed, 30);
   return res.json({ analysisId, status: 'complete', filename, data: results, instant: true });
