@@ -1,6 +1,7 @@
 {
   "private": true,
   "dependencies": {
-    "@supabase/supabase-js": "^2.101.1"
+    "@supabase/supabase-js": "^2.101.1",
+    "@vercel/node": "^5.1.8"
   }
 }
