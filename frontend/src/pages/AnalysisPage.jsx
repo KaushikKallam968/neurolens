@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Eye, EyeOff, Flame } from 'lucide-react';
+import { Eye, EyeOff, Flame, Share2 } from 'lucide-react';
 import { useAnalysisContext } from '../contexts/AnalysisContext';
 import { useVideoSync } from '../hooks/useVideoSync';
 import InlineProgress from '../components/InlineProgress';
@@ -21,7 +21,9 @@ import RetentionCurve from '../components/RetentionCurve';
 import ValenceArousal from '../components/ValenceArousal';
 import AttentionHeatmap from '../components/AttentionHeatmap';
 import KeyMomentThumbnails from '../components/KeyMomentThumbnails';
-import { Breadcrumb } from '../components/ui';
+import AICopilot from '../components/AICopilot';
+import ShareDialog from '../components/ShareDialog';
+import { Breadcrumb, Button } from '../components/ui';
 
 export default function AnalysisPage() {
   const { id } = useParams();
@@ -33,6 +35,7 @@ export default function AnalysisPage() {
   const [phase, setPhase] = useState('loading');
   const [heatmapMode, setHeatmapMode] = useState('off'); // off | heatmap | fog
   const [showHeatmap, setShowHeatmap] = useState(false);
+  const [showShare, setShowShare] = useState(false);
 
   // Load analysis by ID if navigated directly
   useEffect(() => {
@@ -206,9 +209,28 @@ export default function AnalysisPage() {
             </div>
           </section>
 
+          {/* AI Copilot */}
+          <AICopilot data={data} analysisId={results?.analysisId} />
+
+          {/* Share button */}
+          <div className="flex justify-end">
+            <Button variant="ghost" size="sm" onClick={() => setShowShare(true)}>
+              <Share2 size={14} />
+              Share
+            </Button>
+          </div>
+
           <Onboarding />
         </motion.div>
       )}
+
+      {/* Share dialog */}
+      <ShareDialog
+        open={showShare}
+        onClose={() => setShowShare(false)}
+        analysisId={results?.analysisId}
+        neuralScore={data?.neuralScore}
+      />
     </div>
   );
 }

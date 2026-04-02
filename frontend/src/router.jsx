@@ -3,6 +3,7 @@ import App from './App';
 import HomePage from './pages/HomePage';
 import CampaignPage from './pages/CampaignPage';
 import AnalysisPage from './pages/AnalysisPage';
+import SharePage from './pages/SharePage';
 import NotFoundPage from './pages/NotFoundPage';
 
 export const router = createBrowserRouter([
@@ -13,6 +14,7 @@ export const router = createBrowserRouter([
       { index: true, element: <HomePage /> },
       { path: 'campaign/:id', element: <CampaignPage /> },
       { path: 'analysis/:id', element: <AnalysisPage /> },
+      { path: 'share/:token', element: <SharePage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },
