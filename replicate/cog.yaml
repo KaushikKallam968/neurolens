@@ -28,4 +28,8 @@ build:
     - neuralset==0.0.2
     - neuraltrain==0.0.2
 
+  run:
+    - python -c "from huggingface_hub import hf_hub_download; hf_hub_download('facebook/tribev2', 'config.yaml', local_dir='/src/model_weights'); hf_hub_download('facebook/tribev2', 'best.ckpt', local_dir='/src/model_weights')"
+    - python -m spacy download en_core_web_sm
+
 predict: "predict.py:Predictor"

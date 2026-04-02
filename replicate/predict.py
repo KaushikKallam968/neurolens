@@ -39,10 +39,14 @@ class Predictor(BasePredictor):
 
         from tribev2.demo_utils import TribeModel
 
-        # Load model from HuggingFace Hub
+        # Load model from baked-in weights (downloaded during Docker build)
         device = "cuda" if torch.cuda.is_available() else "cpu"
+        weights_dir = "/src/model_weights"
+        if not os.path.exists(os.path.join(weights_dir, "config.yaml")):
+            # Fallback to HuggingFace Hub if weights not baked in
+            weights_dir = "facebook/tribev2"
         self.model = TribeModel.from_pretrained(
-            "facebook/tribev2",
+            weights_dir,
             device=device,
             cache_folder="/tmp/tribev2_cache",
         )
