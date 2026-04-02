@@ -17,22 +17,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (error || !analysis) return errorResponse(res, 'Analysis not found', 404);
   if (analysis.status !== 'complete') return errorResponse(res, 'Analysis not yet complete');
 
-  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-  if (!ANTHROPIC_API_KEY) return errorResponse(res, 'AI analysis unavailable', 503);
+  const GOOGLE_AI_API_KEY = process.env.GOOGLE_AI_API_KEY;
+  if (!GOOGLE_AI_API_KEY) return errorResponse(res, 'AI analysis unavailable — API key not configured', 503);
 
   const prompt = buildPrompt(analysis);
-  const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1024, stream: false, messages: [{ role: 'user', content: prompt }] }),
-  });
 
-  if (!claudeRes.ok) return errorResponse(res, 'AI analysis failed', 502);
-  const result = await claudeRes.json() as any;
-  const text = result.content?.[0]?.text || 'Analysis unavailable';
+  try {
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_AI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
+        }),
+      }
+    );
 
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  return res.json({ analysis: text });
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text();
+      console.error('Gemini API error:', errText);
+      return errorResponse(res, 'AI analysis failed — please try again', 502);
+    }
+
+    const result = await geminiRes.json() as any;
+    const text = result.candidates?.[0]?.content?.parts?.[0]?.text || 'Analysis unavailable';
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    return res.json({ analysis: text });
+  } catch (err: any) {
+    console.error('Gemini request failed:', err.message);
+    return errorResponse(res, 'AI analysis failed', 502);
+  }
 }
 
 function buildPrompt(analysis: Record<string, unknown>): string {
@@ -43,5 +60,11 @@ Neural Score: ${analysis.neural_score}/100
 Metrics: ${JSON.stringify(metrics, null, 2)}
 Key Moments: ${JSON.stringify((analysis.key_moments as any[] || []).slice(0, 5), null, 2)}
 
-Provide strategic creative direction in 3-4 concise paragraphs. Be specific. Reference timestamps. Write for a creative director.`;
+Provide strategic creative direction in 3-4 concise paragraphs:
+1. What the brain data tells us about how viewers experience this content
+2. The specific moments that work and why (reference timestamps)
+3. 2-3 concrete, actionable changes to improve the neural score
+4. How this content compares to typical performance for ${analysis.content_type || 'video'} content
+
+Be specific. Reference the actual data. No generic advice. Write for a creative director, not a neuroscientist.`;
 }
