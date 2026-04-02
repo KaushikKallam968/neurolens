@@ -19,15 +19,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const { data: urlData } = supabaseAdmin.storage.from('videos').getPublicUrl(video.storage_path);
 
-  if (process.env.VITE_DEMO_MODE === 'true') {
-    const mockResults = generateDemoResults();
-    await supabaseAdmin.from('analyses_v2').update({
-      status: 'complete', neural_score: mockResults.neuralScore, percentile: mockResults.percentile,
-      metrics: mockResults.metrics, timeline: mockResults.timeline, completed_at: new Date().toISOString(),
-    }).eq('id', analysisId);
-    return jsonResponse(res, { status: 'complete', instant: true, data: mockResults });
-  }
-
   const webhookUrl = `${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://neurolens.vercel.app'}/api/webhooks/replicate`;
 
   try {
