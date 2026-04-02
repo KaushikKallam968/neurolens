@@ -73,7 +73,13 @@ class Predictor(BasePredictor):
         Returns a JSON string with neuralScore, metrics, timeline, peaks,
         suggestions, and optionally thumbnail paths.
         """
-        video_path = str(video)
+        # Cog downloads files to temp paths without extensions — TribeV2 requires .mp4
+        raw_path = str(video)
+        if not any(raw_path.endswith(ext) for ext in ['.avi', '.mkv', '.mov', '.mp4', '.webm']):
+            video_path = raw_path + '.mp4'
+            os.symlink(raw_path, video_path)
+        else:
+            video_path = raw_path
         logger.info(f"Analyzing: {video_path} (content_type={content_type})")
 
         # Stage 1: Extract events (audio, transcript, visual features)
