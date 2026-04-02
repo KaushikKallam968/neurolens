@@ -24,10 +24,9 @@ jobs:
 
       - name: Build and push to Replicate
         env:
-          REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+          COG_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
         working-directory: replicate
         run: |
-          cog login --token-stdin <<< "$REPLICATE_API_TOKEN"
           cog push r8.im/kaushikkallam968/neurolens-tribev2
 
       - name: Output version
