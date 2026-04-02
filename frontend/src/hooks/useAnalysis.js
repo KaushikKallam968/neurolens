@@ -4,11 +4,22 @@ import { getGpuUrl, saveAnalysis, listAnalyses as sbListAnalyses, getAnalysis as
 const POLL_INTERVAL = 2000;
 const GPU_URL_KEY = 'neurolens_gpu_url';
 
+// Map backend stage names to progress percentages and labels
+const STAGE_PROGRESS = {
+  extracting_events: { progress: 10, label: 'Extracting audio & video events' },
+  events_extracted: { progress: 25, label: 'Events extracted' },
+  extracting_features: { progress: 30, label: 'Extracting visual & audio features' },
+  predicting: { progress: 65, label: 'Predicting neural activation' },
+  computing_metrics: { progress: 90, label: 'Computing engagement metrics' },
+  complete: { progress: 100, label: 'Analysis complete' },
+};
+
 export function useAnalysis() {
   const [status, setStatus] = useState('idle');
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState(0);
+  const [stage, setStage] = useState(null);
   const [analyses, setAnalyses] = useState([]);
   const [gpuUrl, setGpuUrlState] = useState(() => {
     try {
@@ -114,20 +125,33 @@ export function useAnalysis() {
     pollingRef.current = setInterval(async () => {
       try {
         attempts++;
-        // Logarithmic progress curve: reaches ~50% at 1min, ~80% at 3min, caps at 95%
-        // Designed for real GPU inference which takes 3-5 minutes
-        const elapsed = attempts * (POLL_INTERVAL / 1000);
-        setProgress(Math.min(95, Math.round(95 * (1 - Math.exp(-elapsed / 120)))));
         const response = await fetch(getApiUrl(`/api/results/${analysisId}`));
         if (!response.ok) throw new Error('Failed to fetch results');
 
         const data = await response.json();
+
+        // Update stage and progress from backend
+        if (data.stage && STAGE_PROGRESS[data.stage]) {
+          const stageInfo = STAGE_PROGRESS[data.stage];
+          setStage(data.stage);
+          setProgress(stageInfo.progress);
+        } else {
+          // Fallback: logarithmic curve when no stage info
+          const elapsed = attempts * (POLL_INTERVAL / 1000);
+          setProgress(Math.min(95, Math.round(95 * (1 - Math.exp(-elapsed / 120)))));
+        }
+
+        // Progressive data: show partial results while still processing
+        if (data.status === 'processing' && data.data) {
+          setResults(data);
+        }
+
         if (data.status === 'complete') {
           stopPolling();
           setProgress(100);
+          setStage('complete');
           setResults(data);
           setStatus('complete');
-          // Persist to Supabase
           if (data.data) {
             saveAnalysis(
               data.analysisId,
@@ -239,6 +263,7 @@ export function useAnalysis() {
     results,
     error,
     progress,
+    stage,
     analyses,
     gpuUrl,
     gpuSource,

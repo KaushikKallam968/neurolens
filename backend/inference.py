@@ -96,12 +96,13 @@ class TribeInference:
             self.mock_mode = True
             self.model = None
 
-    def analyze(self, video_path):
+    def analyze(self, video_path, on_stage=None):
         """
         Run brain activity prediction on a video file.
 
         Args:
             video_path: path to the uploaded video file
+            on_stage: optional callback(stage_name, partial_data) for progressive updates
 
         Returns:
             dict with neuralScore, timeline, peaks, suggestions
@@ -117,20 +118,21 @@ class TribeInference:
             logger.info(f"Mock analysis for: {video_path}")
             return generate_mock_results(video_path)
 
-        return self._run_real_inference(video_path)
+        return self._run_real_inference(video_path, on_stage)
 
-    def _run_real_inference(self, video_path):
-        """Run actual TribeV2 inference pipeline."""
+    def _run_real_inference(self, video_path, on_stage=None):
+        """Run actual TribeV2 inference pipeline with progressive stage updates."""
+        _report = on_stage or (lambda stage, data=None: None)
+
         try:
             logger.info(f"Running TribeV2 inference on: {video_path}")
 
-            # Extract video events — whisperx may fail on some videos
-            # (empty audio, codec issues, etc.) so we handle that gracefully
+            # Stage 1: Extract events (audio extraction + whisperx transcription)
+            _report("extracting_events")
             try:
                 df = self.model.get_events_dataframe(video_path=video_path)
             except Exception as e:
                 logger.warning(f"Event extraction failed, trying audio-only mode: {e}")
-                # Retry with audio_only=True to skip whisperx transcription
                 try:
                     from tribev2.demo_utils import get_audio_and_text_events
                     import pandas as pd
@@ -152,7 +154,18 @@ class TribeInference:
             if df is None or len(df) == 0:
                 raise RuntimeError("TribeV2 produced no events from video")
 
-            # Run cortical prediction
+            # Report event extraction info
+            n_words = len(df[df.type == "Word"]) if "type" in df.columns else 0
+            _report("events_extracted", {
+                "hasTranscript": n_words > 0,
+                "wordCount": n_words,
+            })
+
+            # Stage 2: Extract features (V-JEPA2 + Wav2Vec-BERT)
+            _report("extracting_features")
+
+            # Stage 3: Run brain prediction model
+            _report("predicting")
             preds, segments = self.model.predict(events=df)
 
             if preds is None:
@@ -163,7 +176,11 @@ class TribeInference:
                 f"{preds.shape[1]} vertices"
             )
 
-            return compute_metrics(preds, segments)
+            # Stage 4: Compute metrics (fast — sub-second)
+            _report("computing_metrics")
+            result = compute_metrics(preds, segments)
+
+            return result
 
         except Exception as e:
             logger.error(f"TribeV2 inference failed: {e}")

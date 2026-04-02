@@ -32,25 +32,32 @@ def init_db():
             data TEXT,
             error TEXT,
             created_at REAL,
-            completed_at REAL
+            completed_at REAL,
+            stage TEXT
         )
     """)
+    # Add stage column to existing tables (safe to run multiple times)
+    try:
+        conn.execute("ALTER TABLE analyses ADD COLUMN stage TEXT")
+    except Exception:
+        pass  # Column already exists
     conn.commit()
     conn.close()
     logger.info(f"Database initialized at {DB_PATH}")
 
 
-def save_analysis(analysis_id, status, filename=None, video_path=None, data=None, error=None, created_at=None, completed_at=None):
+def save_analysis(analysis_id, status, filename=None, video_path=None, data=None, error=None, created_at=None, completed_at=None, stage=None):
     """Insert or update an analysis record."""
     conn = get_connection()
     conn.execute("""
-        INSERT INTO analyses (analysis_id, status, filename, video_path, data, error, created_at, completed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO analyses (analysis_id, status, filename, video_path, data, error, created_at, completed_at, stage)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(analysis_id) DO UPDATE SET
             status=excluded.status,
-            data=excluded.data,
+            data=COALESCE(excluded.data, analyses.data),
             error=excluded.error,
-            completed_at=excluded.completed_at
+            completed_at=excluded.completed_at,
+            stage=COALESCE(excluded.stage, analyses.stage)
     """, (
         analysis_id,
         status,
@@ -60,6 +67,7 @@ def save_analysis(analysis_id, status, filename=None, video_path=None, data=None
         error,
         created_at,
         completed_at,
+        stage,
     ))
     conn.commit()
     conn.close()

@@ -132,14 +132,25 @@ async def analyze_video(file: UploadFile = File(...)):
 
 
 def _run_analysis(analysis_id, video_path):
-    """Run inference in a background thread. Persists results to SQLite."""
+    """Run inference in a background thread with progressive stage updates."""
+    def on_stage(stage, partial_data=None):
+        """Callback to persist intermediate progress."""
+        save_analysis(
+            analysis_id=analysis_id,
+            status="processing",
+            stage=stage,
+            data=partial_data,
+        )
+        logger.info(f"Analysis {analysis_id}: stage={stage}")
+
     try:
         logger.info(f"Starting analysis: {analysis_id}")
-        result = engine.analyze(video_path)
+        result = engine.analyze(video_path, on_stage=on_stage)
 
         save_analysis(
             analysis_id=analysis_id,
             status="complete",
+            stage="complete",
             data=result,
             completed_at=time.time(),
         )
@@ -172,6 +183,7 @@ async def get_results(analysis_id: str):
         "data": entry.get("data"),
         "error": entry.get("error"),
         "filename": entry.get("filename"),
+        "stage": entry.get("stage"),
     }
 
 

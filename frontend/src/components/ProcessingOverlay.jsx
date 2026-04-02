@@ -1,23 +1,31 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const STAGES = [
+const STAGE_LABELS = {
+  extracting_events: 'Extracting audio & transcribing speech',
+  events_extracted: 'Processing video frames',
+  extracting_features: 'Extracting visual & audio features',
+  predicting: 'Predicting neural activation',
+  computing_metrics: 'Computing engagement metrics',
+};
+
+const FALLBACK_STAGES = [
   { label: 'Extracting visual features', threshold: 25 },
   { label: 'Mapping audio response', threshold: 50 },
   { label: 'Predicting neural activation', threshold: 75 },
   { label: 'Computing engagement score', threshold: 100 },
 ];
 
-function getStageIndex(progress) {
-  for (let i = 0; i < STAGES.length; i++) {
-    if (progress < STAGES[i].threshold) return i;
+function getLabel(stage, progress) {
+  if (stage && STAGE_LABELS[stage]) return STAGE_LABELS[stage];
+  for (const s of FALLBACK_STAGES) {
+    if (progress < s.threshold) return s.label;
   }
-  return STAGES.length - 1;
+  return FALLBACK_STAGES[FALLBACK_STAGES.length - 1].label;
 }
 
-export default function ProcessingOverlay({ progress = 0 }) {
-  const stageIndex = useMemo(() => getStageIndex(progress), [progress]);
-  const currentStage = STAGES[stageIndex];
+export default function ProcessingOverlay({ progress = 0, stage = null }) {
+  const label = useMemo(() => getLabel(stage, progress), [stage, progress]);
 
   return (
     <motion.div
@@ -46,14 +54,14 @@ export default function ProcessingOverlay({ progress = 0 }) {
         <div className="h-8 flex items-center justify-center">
           <AnimatePresence mode="wait">
             <motion.p
-              key={stageIndex}
+              key={label}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -12 }}
               transition={{ duration: 0.4 }}
               className="font-display text-lg text-text-bright text-center"
             >
-              {currentStage.label}
+              {label}
             </motion.p>
           </AnimatePresence>
         </div>

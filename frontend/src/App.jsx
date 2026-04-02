@@ -21,7 +21,7 @@ import Onboarding from './components/Onboarding';
 
 export default function App() {
   const {
-    status, results, progress, uploadVideo, reset, error,
+    status, results, progress, stage, uploadVideo, reset, error,
     analyses, selectAnalysis, gpuUrl, gpuSource, setGpuUrl, getApiUrl,
   } = useAnalysis();
   const videoRef = useRef(null);
@@ -105,7 +105,7 @@ export default function App() {
 
       <AnimatePresence mode="wait">
         {phase === 'processing' && (
-          <ProcessingOverlay key="processing" progress={progress} />
+          <ProcessingOverlay key="processing" progress={progress} stage={stage} />
         )}
       </AnimatePresence>
 
