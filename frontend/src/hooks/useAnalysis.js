@@ -114,7 +114,10 @@ export function useAnalysis() {
     pollingRef.current = setInterval(async () => {
       try {
         attempts++;
-        setProgress(Math.min(95, attempts * 8));
+        // Logarithmic progress curve: reaches ~50% at 1min, ~80% at 3min, caps at 95%
+        // Designed for real GPU inference which takes 3-5 minutes
+        const elapsed = attempts * (POLL_INTERVAL / 1000);
+        setProgress(Math.min(95, Math.round(95 * (1 - Math.exp(-elapsed / 120)))));
         const response = await fetch(getApiUrl(`/api/results/${analysisId}`));
         if (!response.ok) throw new Error('Failed to fetch results');
 
