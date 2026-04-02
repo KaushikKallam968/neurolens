@@ -5,7 +5,6 @@ const MODEL_VERSION = process.env.REPLICATE_MODEL_VERSION;
 
 export const config = {
   api: { bodyParser: { sizeLimit: '50mb' } },
-  maxDuration: 300,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -21,11 +20,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Extract the file from the request body
     const filename = extractFilename(req) || 'uploaded-video.mp4';
 
-    // For Replicate, we need the video as a data URI or URL
-    // Convert the uploaded file body to base64 data URI
+    // Convert uploaded file to base64 data URI for Replicate
     const bodyBuffer = await getRawBody(req);
     const boundary = getBoundary(req.headers['content-type'] || '');
     const fileBuffer = boundary ? extractFileFromMultipart(bodyBuffer, boundary) : bodyBuffer;
@@ -35,10 +32,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const base64 = fileBuffer.toString('base64');
-    const mimeType = 'video/mp4';
-    const dataUri = `data:${mimeType};base64,${base64}`;
+    const dataUri = `data:video/mp4;base64,${base64}`;
 
-    // Create Replicate prediction
+    // Create Replicate prediction and return immediately
     const predictionRes = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
@@ -62,25 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const prediction = await predictionRes.json();
 
-    // Poll for completion (max 5 minutes)
-    const result = await pollPrediction(prediction.id, 300000);
-
-    if (result.status === 'succeeded' && result.output) {
-      const data = typeof result.output === 'string' ? JSON.parse(result.output) : result.output;
-      return res.json({
-        analysisId: prediction.id,
-        status: 'complete',
-        filename,
-        data,
-        instant: false,
-      });
-    }
-
-    if (result.status === 'failed') {
-      throw new Error(result.error || 'Prediction failed');
-    }
-
-    // If still processing after timeout, return pending status
+    // Return immediately — frontend will poll /api/results/{predictionId}
     return res.json({
       analysisId: prediction.id,
       status: 'processing',
@@ -92,31 +70,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-async function pollPrediction(id: string, timeoutMs: number): Promise<any> {
-  const start = Date.now();
-  const interval = 2000;
-
-  while (Date.now() - start < timeoutMs) {
-    const res = await fetch(`https://api.replicate.com/v1/predictions/${id}`, {
-      headers: { 'Authorization': `Bearer ${REPLICATE_API_TOKEN}` },
-    });
-    const data = await res.json();
-
-    if (data.status === 'succeeded' || data.status === 'failed' || data.status === 'canceled') {
-      return data;
-    }
-
-    await new Promise(resolve => setTimeout(resolve, interval));
-  }
-
-  return { status: 'timeout' };
-}
-
 function getRawBody(req: VercelRequest): Promise<Buffer> {
-  // Vercel may have already parsed the body
   if (Buffer.isBuffer(req.body)) return Promise.resolve(req.body);
   if (typeof req.body === 'string') return Promise.resolve(Buffer.from(req.body));
-
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     req.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -133,14 +89,11 @@ function getBoundary(contentType: string): string | null {
 function extractFileFromMultipart(body: Buffer, boundary: string): Buffer | null {
   const str = body.toString('binary');
   const parts = str.split(`--${boundary}`);
-
   for (const part of parts) {
     if (part.includes('Content-Disposition') && part.includes('filename=')) {
-      // Find the double CRLF that separates headers from content
       const headerEnd = part.indexOf('\r\n\r\n');
       if (headerEnd === -1) continue;
       const content = part.substring(headerEnd + 4);
-      // Remove trailing \r\n
       const trimmed = content.endsWith('\r\n') ? content.slice(0, -2) : content;
       return Buffer.from(trimmed, 'binary');
     }
@@ -158,41 +111,29 @@ function extractFilename(req: VercelRequest): string | null {
   return null;
 }
 
-// Fallback mock handler when Replicate isn't configured
+// Mock handler when Replicate isn't configured
 function handleMock(req: VercelRequest, res: VercelResponse) {
   const analysisId = crypto.randomUUID();
   const filename = extractFilename(req) || 'uploaded-video.mp4';
   const seed = hashCode(filename + analysisId);
   const results = generateMockAnalysis(seed, 30);
-
-  return res.json({
-    analysisId,
-    status: 'complete',
-    filename,
-    data: results,
-    instant: true,
-  });
+  return res.json({ analysisId, status: 'complete', filename, data: results, instant: true });
 }
 
 function hashCode(str: string): number {
   let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
-  }
+  for (let i = 0; i < str.length; i++) hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
   return Math.abs(hash);
 }
 
 function seededRandom(seed: number): () => number {
   let s = seed;
-  return () => {
-    s = (s * 1664525 + 1013904223) | 0;
-    return (s >>> 0) / 4294967296;
-  };
+  return () => { s = (s * 1664525 + 1013904223) | 0; return (s >>> 0) / 4294967296; };
 }
 
 function generateMockAnalysis(seed: number, duration: number) {
   const rand = seededRandom(seed);
-  const metricConfigs: Record<string, { freq: number; amp: number; base: number }> = {
+  const cfgs: Record<string, { freq: number; amp: number; base: number }> = {
     emotionalResonance: { freq: 0.08, amp: 0.22, base: 0.45 + rand() * 0.2 },
     attentionFocus: { freq: 0.12, amp: 0.18, base: 0.5 + rand() * 0.2 },
     memorability: { freq: 0.06, amp: 0.15, base: 0.4 + rand() * 0.2 },
@@ -202,67 +143,48 @@ function generateMockAnalysis(seed: number, duration: number) {
     motionEnergy: { freq: 0.15, amp: 0.2, base: 0.38 + rand() * 0.2 },
   };
   const timeline: Record<string, number[]> = {};
-  for (const [key, cfg] of Object.entries(metricConfigs)) {
+  for (const [key, cfg] of Object.entries(cfgs)) {
     const phase = rand() * Math.PI * 2;
     timeline[key] = Array.from({ length: duration }, (_, i) => {
       let val = cfg.base + cfg.amp * Math.sin(i * cfg.freq * Math.PI * 2 + phase);
       val += 0.2 * Math.exp(-((i - 2) ** 2) / 2);
-      const peakTime = Math.floor(duration * (0.4 + rand() * 0.2));
-      val += 0.25 * Math.exp(-((i - peakTime) ** 2) / 8);
-      const dipTime = Math.floor(duration * (0.6 + rand() * 0.15));
-      val -= 0.15 * Math.exp(-((i - dipTime) ** 2) / 4);
+      const pk = Math.floor(duration * (0.4 + rand() * 0.2));
+      val += 0.25 * Math.exp(-((i - pk) ** 2) / 8);
+      const dp = Math.floor(duration * (0.6 + rand() * 0.15));
+      val -= 0.15 * Math.exp(-((i - dp) ** 2) / 4);
       val += (rand() - 0.5) * 0.06;
       return Math.round(Math.max(0, Math.min(1, val)) * 1000) / 1000;
     });
   }
   const metrics: Record<string, number> = {};
-  for (const [key, values] of Object.entries(timeline)) {
-    metrics[key] = Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 1000) / 1000;
-  }
-  const weights: Record<string, number> = { emotionalResonance: 0.30, attentionFocus: 0.25, memorability: 0.20, narrativeComprehension: 0.15, sceneImpact: 0.05, motionEnergy: 0.05 };
-  const rawScore = Object.entries(weights).reduce((sum, [k, w]) => sum + (metrics[k] || 0) * w, 0);
+  for (const [key, values] of Object.entries(timeline)) metrics[key] = Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 1000) / 1000;
+  const wts: Record<string, number> = { emotionalResonance: 0.30, attentionFocus: 0.25, memorability: 0.20, narrativeComprehension: 0.15, sceneImpact: 0.05, motionEnergy: 0.05 };
+  const rawScore = Object.entries(wts).reduce((s, [k, w]) => s + (metrics[k] || 0) * w, 0);
   const neuralScore = Math.max(0, Math.min(100, Math.round(rawScore * 100)));
   const percentile = Math.max(10, Math.min(95, neuralScore + Math.round((rand() - 0.5) * 20)));
-
   const sensoryTimeline = { visual: timeline.sceneImpact, audio: timeline.emotionalResonance, language: timeline.narrativeComprehension };
   const clValues = timeline.attentionFocus.map((v, i) => Math.round((v * 0.6 + (timeline.narrativeComprehension[i] || 0) * 0.4) * 1000) / 1000);
   const clScore = Math.round((clValues.reduce((a, b) => a + b, 0) / clValues.length) * 100);
   const cognitiveLoad = { score: clScore, timeline: clValues, label: clScore > 70 ? 'High' : clScore > 40 ? 'Moderate' : 'Low' };
   const attnStd = Math.sqrt(timeline.attentionFocus.reduce((s, v) => s + (v - metrics.attentionFocus) ** 2, 0) / duration);
   const focusScore = { score: Math.round(Math.max(0, Math.min(100, (1 - attnStd * 3) * 100))), label: attnStd < 0.12 ? 'Laser focused' : attnStd < 0.2 ? 'Good' : 'Scattered' };
-
   const arcCurve = timeline.emotionalResonance.map((_, i) => {
-    const w = 3;
-    const slice = timeline.emotionalResonance.slice(Math.max(0, i - w), Math.min(duration, i + w + 1));
+    const slice = timeline.emotionalResonance.slice(Math.max(0, i - 3), Math.min(duration, i + 4));
     return Math.round((slice.reduce((a, b) => a + b, 0) / slice.length) * 1000) / 1000;
   });
   const climaxIdx = arcCurve.indexOf(Math.max(...arcCurve));
-  const narrativeArc = {
-    curve: arcCurve,
-    hookStrength: Math.round(((timeline.attentionFocus[0] + timeline.attentionFocus[1] + timeline.attentionFocus[2]) / 3) * 100) / 100,
-    climaxTime: climaxIdx, climaxValue: arcCurve[climaxIdx],
-    endingStrength: Math.round(((arcCurve[duration - 1] + arcCurve[duration - 2] + arcCurve[duration - 3]) / 3) * 100) / 100,
-  };
+  const narrativeArc = { curve: arcCurve, hookStrength: Math.round(((timeline.attentionFocus[0] + timeline.attentionFocus[1] + timeline.attentionFocus[2]) / 3) * 100) / 100, climaxTime: climaxIdx, climaxValue: arcCurve[climaxIdx], endingStrength: Math.round(((arcCurve[duration - 1] + arcCurve[duration - 2] + arcCurve[duration - 3]) / 3) * 100) / 100 };
   const avCorr = sensoryTimeline.visual.reduce((s, v, i) => s + v * sensoryTimeline.audio[i], 0) / duration;
   const avSyncScore = { score: Math.round(avCorr * 100), label: avCorr > 0.35 ? 'Well-synced' : 'Loosely synced' };
-
-  const keyMoments = [
-    { timestamp: 2, type: 'hook', label: 'Opening hook', metric: 'attentionFocus', value: timeline.attentionFocus[2] },
-    { timestamp: climaxIdx, type: 'peak', label: 'Emotional peak', metric: 'emotionalResonance', value: timeline.emotionalResonance[climaxIdx] },
-  ];
+  const keyMoments: any[] = [{ timestamp: 2, type: 'hook', label: 'Opening hook', metric: 'attentionFocus', value: timeline.attentionFocus[2] }, { timestamp: climaxIdx, type: 'peak', label: 'Emotional peak', metric: 'emotionalResonance', value: timeline.emotionalResonance[climaxIdx] }];
   let maxDrop = 0, dropIdx = 0;
-  for (let i = 3; i < duration; i++) {
-    const drop = timeline.attentionFocus[i - 3] - timeline.attentionFocus[i];
-    if (drop > maxDrop) { maxDrop = drop; dropIdx = i; }
-  }
+  for (let i = 3; i < duration; i++) { const d = timeline.attentionFocus[i - 3] - timeline.attentionFocus[i]; if (d > maxDrop) { maxDrop = d; dropIdx = i; } }
   if (maxDrop > 0.1) keyMoments.push({ timestamp: dropIdx, type: 'drop', label: 'Attention drop', metric: 'attentionFocus', value: timeline.attentionFocus[dropIdx] });
-
   const peaks = keyMoments.filter(m => m.type === 'peak').map(m => ({ timestamp: m.timestamp, metric: m.metric, value: m.value }));
   const suggestions: any[] = [];
   if (narrativeArc.hookStrength < 0.6) suggestions.push({ type: 'improve', timestamp: 0, message: 'Weak opening — add a face, question, or pattern interrupt in the first 2 seconds', priority: 'high' });
   if (maxDrop > 0.15) suggestions.push({ type: 'improve', timestamp: dropIdx, message: `Attention drops ${Math.round(maxDrop * 100)}% at ${dropIdx}s — add a scene change, text overlay, or new speaker`, priority: 'high' });
   if (narrativeArc.endingStrength < 0.5) suggestions.push({ type: 'improve', timestamp: duration - 3, message: 'Ending loses momentum — close with a strong CTA or emotional callback', priority: 'medium' });
   suggestions.push({ type: 'strength', timestamp: climaxIdx, message: `Emotional peak at ${climaxIdx}s drives engagement — consider building more moments like this`, priority: 'info' });
-
   return { neuralScore, percentile, metrics, timeline, sensoryTimeline, cognitiveLoad, focusScore, narrativeArc, avSyncScore, keyMoments, peaks, suggestions, contentType: 'custom', schemaVersion: 2 };
 }
