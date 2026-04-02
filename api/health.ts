@@ -1,9 +1,8 @@
-import { jsonResponse } from './_lib/auth';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-export const config = { runtime: 'edge' };
-
-export default async function handler(request: Request) {
-  return jsonResponse({
+export default function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  return res.json({
     status: 'ok',
     version: '2.0.0',
     mode: process.env.VITE_DEMO_MODE === 'true' ? 'demo' : 'production',

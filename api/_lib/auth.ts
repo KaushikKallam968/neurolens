@@ -1,17 +1,8 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getUser } from './supabase';
 
-export interface AuthResult {
-  userId: string;
-  error: null;
-}
-
-export interface AuthError {
-  userId: null;
-  error: string;
-}
-
-export async function requireAuth(request: Request): Promise<AuthResult | AuthError> {
-  const authHeader = request.headers.get('Authorization');
+export async function requireAuth(req: VercelRequest): Promise<{ userId: string | null; error: string | null }> {
+  const authHeader = req.headers.authorization;
   if (!authHeader) {
     return { userId: null, error: 'Missing Authorization header' };
   }
@@ -24,29 +15,23 @@ export async function requireAuth(request: Request): Promise<AuthResult | AuthEr
   return { userId: user.id, error: null };
 }
 
-export function jsonResponse(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
-  });
+export function jsonResponse(res: VercelResponse, data: unknown, status = 200) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  return res.status(status).json(data);
 }
 
-export function errorResponse(message: string, status = 400) {
-  return jsonResponse({ error: message }, status);
+export function errorResponse(res: VercelResponse, message: string, status = 400) {
+  return jsonResponse(res, { error: message }, status);
 }
 
-export function corsHeaders() {
-  return new Response(null, {
-    status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Max-Age': '86400',
-    },
-  });
+export function handleCors(req: VercelRequest, res: VercelResponse): boolean {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return true;
+  }
+  return false;
 }
