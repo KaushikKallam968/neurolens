@@ -22,18 +22,20 @@ jobs:
           sudo chmod +x /usr/local/bin/cog
           cog --version
 
-      - name: Authenticate Docker to Replicate registry
+      - name: Build Cog image
+        working-directory: replicate
+        run: |
+          cog build -t r8.im/kaushikkallam968/neurolens-tribev2
+
+      - name: Login to Replicate registry
         env:
           REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
         run: |
           echo "$REPLICATE_API_TOKEN" | docker login r8.im -u kaushikkallam968 --password-stdin
 
-      - name: Build and push to Replicate
-        env:
-          REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
-        working-directory: replicate
+      - name: Push image to Replicate
         run: |
-          cog push r8.im/kaushikkallam968/neurolens-tribev2
+          docker push r8.im/kaushikkallam968/neurolens-tribev2
 
       - name: Output version
         if: success()
