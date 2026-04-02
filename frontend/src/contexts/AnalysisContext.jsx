@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useRef } from 'react';
 import { useProcessingStatus } from '../hooks/useProcessingStatus';
 import { useCampaigns } from '../hooks/useCampaigns';
-import { uploadVideo as sbUploadVideo } from '../lib/supabase';
+import { uploadVideo as sbUploadVideo, DEMO_MODE } from '../lib/supabase';
 import { DEMO_ANALYSIS } from '../lib/demoData';
 
 const AnalysisContext = createContext(null);
@@ -30,6 +30,23 @@ export function AnalysisProvider({ children }) {
     try {
       processing.startUploading();
 
+      // Demo mode: generate results client-side from the uploaded file
+      if (DEMO_MODE) {
+        // Simulate brief processing delay for realism
+        await new Promise(resolve => setTimeout(resolve, 800));
+
+        const analysisId = `demo-${Date.now()}`;
+        const demoResult = {
+          ...DEMO_ANALYSIS,
+          analysisId,
+          filename: file.name,
+        };
+        setResults(demoResult);
+        processing.completeInstant();
+        return analysisId;
+      }
+
+      // Production: use new upload flow (signed URL → Storage → Replicate)
       const formData = new FormData();
       formData.append('file', file);
 
@@ -43,14 +60,13 @@ export function AnalysisProvider({ children }) {
       const data = await response.json();
 
       if (data.instant && data.status === 'complete') {
-        // Vercel serverless — results came back immediately
         setResults(data);
         processing.completeInstant();
         campaigns.persistAnalysis(data);
         return data.analysisId;
       }
 
-      // Local backend — poll for async results
+      // Poll for async results
       processing.startProcessing(data.analysisId);
       return data.analysisId;
     } catch (err) {
