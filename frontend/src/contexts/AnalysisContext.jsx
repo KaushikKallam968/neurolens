@@ -30,23 +30,6 @@ export function AnalysisProvider({ children }) {
     try {
       processing.startUploading();
 
-      // Demo mode: generate results client-side from the uploaded file
-      if (DEMO_MODE) {
-        // Simulate brief processing delay for realism
-        await new Promise(resolve => setTimeout(resolve, 800));
-
-        const analysisId = `demo-${Date.now()}`;
-        const demoResult = {
-          ...DEMO_ANALYSIS,
-          analysisId,
-          filename: file.name,
-        };
-        setResults(demoResult);
-        processing.completeInstant();
-        return analysisId;
-      }
-
-      // Production: use new upload flow (signed URL → Storage → Replicate)
       const formData = new FormData();
       formData.append('file', file);
 
@@ -66,7 +49,7 @@ export function AnalysisProvider({ children }) {
         return data.analysisId;
       }
 
-      // Poll for async results
+      // Poll for async results (when Replicate GPU is connected)
       processing.startProcessing(data.analysisId);
       return data.analysisId;
     } catch (err) {
